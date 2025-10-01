@@ -8,6 +8,7 @@ import pyarrow.csv as pacsv
 import pyarrow.dataset as pads
 import pyarrow.parquet as pq
 from schemas.schemas import customers_schema
+from typing import Optional, List, Any
 
 try:
     from deltalake import write_deltalake
@@ -41,10 +42,48 @@ def mark_processed(conn, p, n): conn.execute("INSERT OR REPLACE INTO manifest_pr
 def write_parquet_partitioned(table, base_path, partitioning=None):
     pads.write_dataset(table, base_dir=str(base_path), format='parquet', partitioning=partitioning, existing_data_behavior='overwrite_or_ignore')
 
-def write_delta(table, base_path, mode='append', partition_by=None, merge_schema=False):
-    if write_deltalake is None:
-        raise RuntimeError('deltalake not installed')
-    write_deltalake(str(base_path), table=table, mode=mode, partition_by=partition_by or [], overwrite_schema=False, engine='rust', schema_mode='merge' if merge_schema else 'fail')
+# def write_delta(table, base_path, mode='append', partition_by=None, merge_schema=False):
+#     if write_deltalake is None:
+#         raise RuntimeError('deltalake not installed')
+    # write_deltalake(
+    #     str(base_path),
+    #     table=table,
+    #     mode=mode,
+    #     partition_by=partition_by or [],
+    #     overwrite_schema=False,
+    #     engine='rust',
+    #     schema_mode='merge' if merge_schema else 'fail'
+    #     )
+
+def write_delta(table: Any, base_path: str, mode: str = 'append', partition_by: Optional[List[str]] = None, merge_schema: bool = False):
+    """
+    Writes data to a Delta Lake table using the deltalake library (version 1.1.4 compatible).
+
+    Args:
+        table: The data to write (e.g., a Pandas DataFrame or PyArrow Table).
+        base_path: The URI or path to the Delta Lake table.
+        mode: The write mode ('append', 'overwrite', 'error_if_exists').
+        partition_by: A list of column names to partition the table by.
+        merge_schema: If True, enables schema evolution by merging the new schema.
+    """
+    
+    # Start with the core required arguments
+    write_kwargs = {
+        'data': table,
+        'mode': mode,
+        'partition_by': partition_by,
+    }
+
+    # Correction: Only add 'schema_mode' if merge_schema is True, and set it to 'merge'.
+    # If merge_schema is False, we omit the parameter entirely to avoid the 'error' value.
+    if merge_schema:
+        write_kwargs['schema_mode'] = 'merge'
+    
+    # Call write_deltalake with the path as the first positional argument
+    write_deltalake(
+        str(base_path), # Path as the first positional argument
+        **write_kwargs  # Unpack all other arguments
+    )
 
 def load_customers(raw_root, lake_root, conn):
     src = raw_root/'customers.csv'
