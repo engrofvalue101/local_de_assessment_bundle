@@ -151,6 +151,7 @@ cython_debug/
 #analytics/*.pbix
 *.duckdb
 *.duckdb.wal
+duckdb.zip
 
 # Exclude large datasets but keep samples
 data_raw/*
