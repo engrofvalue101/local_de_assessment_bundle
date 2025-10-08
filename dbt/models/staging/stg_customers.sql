@@ -1,23 +1,36 @@
-{{ config(materialized='table', contract={'enforced': true}) }}
-
-with src as (
-  select * from bronze_customers_parquet
+WITH src AS (
+  SELECT * FROM {{ source_reader('bronze_delta', 'customers') }}
 ),
-typed as (
-  select
-    cast(customer_id as bigint) as customer_id,
+-- Deduplicate on natural_key, keeping the earliest record by ingestion_ts
+deduplicated AS (
+  SELECT *
+    FROM (
+        SELECT *,
+               ROW_NUMBER() OVER (
+                  PARTITION BY natural_key
+                  ORDER BY customer_id
+                  ) AS _row_num
+        FROM src
+        )
+    WHERE _row_num = 1
+),
+
+typed AS (
+  SELECT
+    CAST(customer_id AS bigint) AS customer_id,
     natural_key,
-    trim(first_name) as first_name,
-    trim(last_name) as last_name,
+    {{ trim_string('first_name') }} AS first_name,
+    {{ trim_string('last_name') }} AS last_name,
     email,
     phone,
     address_line1, address_line2, city, state_region, postcode, country_code,
-    cast(latitude as double) as latitude,
-    cast(longitude as double) as longitude,
-    cast(birth_date as date) as birth_date,
-    cast(join_ts as timestamp) as join_ts_utc,
-    cast(is_vip as boolean) as is_vip,
-    cast(gdpr_consent as boolean) as gdpr_consent
-  from src
+    CAST(latitude AS double) AS latitude,
+    CAST(longitude AS double) AS longitude,
+    CAST(birth_date AS date) AS birth_date,
+    {{ derive_age('birth_date') }} AS age,
+    {{ convert_to_utc('join_ts') }} AS join_ts,
+    {{ handle_null('is_vip', 'false') }} AS is_vip,
+    {{ handle_null('gdpr_consent', 'false') }} AS gdpr_consent
+  FROM deduplicated
 )
-select * from typed;
+SELECT * FROM typed

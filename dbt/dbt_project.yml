@@ -15,10 +15,15 @@ clean-targets: ['target']
 
 models:
   local_de_assessment:
-    +materialized: view
+    +materialized: table         # Applies to ALL models
+    
     staging:
       +schema: stg
+      #+contract:
+        #enforced: true           # Only staging has contracts
+    
     silver:
       +schema: silver
+    
     gold:
       +schema: gold

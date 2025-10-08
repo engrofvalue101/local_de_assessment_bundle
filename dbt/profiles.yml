@@ -1,0 +1,12 @@
+local_duckdb:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ../duckdb/warehouse.duckdb
+      threads: 4
+      extensions:
+        - delta
+        - parquet
+      settings:
+        max_memory: '10GB'

@@ -186,3 +186,5 @@ logs/
 # Testing
 test_output/
 test_data/
+
+.gitignore.original

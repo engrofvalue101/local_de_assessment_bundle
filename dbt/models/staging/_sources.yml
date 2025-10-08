@@ -1,0 +1,122 @@
+version: 2
+
+sources:
+  - name: bronze_parquet
+    description: "Bronze layer data ingested from source systems - Parquet format"
+    meta:
+      layer: bronze
+      file_format: parquet
+    
+    tables:
+      - name: customers
+        description: "Raw customer data from bronze layer"
+        meta:
+          file_format: parquet
+          file_path: ../lake/bronze/parquet/customers/
+        columns:
+          - name: customer_id
+            description: |
+              Surrogate key: Technical identifier from source system.
+              Auto-generated unique ID with no business meaning.
+            meta:
+              key_type: surrogate
+            tests:
+              - unique
+              - not_null
+          - name: natural_key
+            description: |
+              Natural key: Business identifier for customers.
+              This is the key that business users recognize and use.
+            meta:
+              key_type: natural
+              business_key: true
+            tests:
+              - unique
+              - not_null
+
+
+      - name: products
+        description: "Raw products data from bronze layer"
+        meta:
+          file_format: parquet
+          file_path: ../lake/bronze/parquet/products/
+        columns:
+          - name: product_id
+            description: |
+              Surrogate key: Technical identifier from source system.
+              Auto-generated unique ID with no business meaning.
+            meta:
+              key_type: surrogate
+            tests:
+              - unique
+              - not_null
+          - name: sku
+            description: |
+              Natural key: Product SKU (Stock Keeping Unit).
+              Business identifier used by warehouse and inventory systems.
+            meta:
+              key_type: natural
+              business_key: true
+            tests:
+              - unique
+              - not_null
+
+
+  - name: bronze_delta
+    description: "Bronze layer data ingested from source systems - Delta format"
+    meta:
+      layer: bronze
+      file_format: delta
+    
+    tables:
+      - name: customers
+        description: "Raw customer data from bronze layer"
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/customers/
+        columns:
+          - name: customer_id
+            description: |
+              Surrogate key: Technical identifier from source system.
+              Auto-generated unique ID with no business meaning.
+            meta:
+              key_type: surrogate
+            tests:
+              - unique
+              - not_null
+          - name: natural_key
+            description: |
+              Natural key: Business identifier for customers.
+              This is the key that business users recognize and use.
+            meta:
+              key_type: natural
+              business_key: true
+            tests:
+              - unique
+              - not_null
+
+      - name: products
+        description: "Raw products data from bronze layer"
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/products/
+        columns:
+          - name: product_id
+            description: |
+              Surrogate key: Technical identifier from source system.
+              Auto-generated unique ID with no business meaning.
+            meta:
+              key_type: surrogate
+            tests:
+              - unique
+              - not_null
+          - name: sku
+            description: |
+              Natural key: Product SKU (Stock Keeping Unit).
+              Business identifier used by warehouse and inventory systems.
+            meta:
+              key_type: natural
+              business_key: true
+            tests:
+              - unique
+              - not_null
