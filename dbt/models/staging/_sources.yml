@@ -11,10 +11,14 @@ sources:
 
   - name: bronze_delta
     description: "Bronze layer data ingested from source systems - Delta format"
+    schema: bronze
     meta:
       layer: bronze
       file_format: delta
       purpose: "ACID transactions, incremental updates, time travel capabilities"
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
     
     tables:
       # ------------------------------------------------------------------------
@@ -22,6 +26,7 @@ sources:
       # ------------------------------------------------------------------------
       - name: customers
         description: "Raw customer data from bronze layer"
+        loaded_at_field: ingestion_ts
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/customers/
@@ -45,12 +50,26 @@ sources:
             tests:
               - unique
               - not_null
+          - name: email
+            description: "Customer email address"
+            tests:
+              - not_null
+              - email_format
+          - name: latitude
+            description: "Geographical latitude coordinate of customer's primary address"
+            tests:
+              - latitude_range
+          - name: longitude
+            description: "Geographical longitude coordinate of customer's primary address"
+            tests:
+              - longitude_range
 
       # ------------------------------------------------------------------------
       # PRODUCTS - Product catalog and inventory data
       # ------------------------------------------------------------------------
       - name: products
         description: "Raw products data from bronze layer"
+        loaded_at_field: ingestion_ts
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/products/
@@ -80,6 +99,7 @@ sources:
       # ------------------------------------------------------------------------
       - name: stores
         description: "Raw stores data from bronze layer"
+        loaded_at_field: ingestion_ts
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/stores/
@@ -110,6 +130,7 @@ sources:
       # ------------------------------------------------------------------------
       - name: suppliers
         description: "Raw suppliers data from bronze layer"
+        loaded_at_field: ingestion_ts
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/suppliers/
@@ -136,6 +157,90 @@ sources:
             tests:
               - unique
               - not_null
+
+      # ------------------------------------------------------------------------
+      # EXCHANGE RATES - foreign currencies exchange rates master data
+      # ------------------------------------------------------------------------
+      - name: exchange_rates
+        description: "Raw exchange_rates data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/exchange_rates/
+
+
+      # ------------------------------------------------------------------------
+      # SENSORS - sensor readings master data
+      # ------------------------------------------------------------------------
+      - name: sensors
+        description: "Raw sensors data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/sensors/
+
+      # ------------------------------------------------------------------------
+      # EVENTS - events master data
+      # ------------------------------------------------------------------------
+      - name: events
+        description: "Raw events data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/events/
+
+      # ------------------------------------------------------------------------
+      # ORDERS - orders master data
+      # ------------------------------------------------------------------------
+      - name: orders
+        description: "Raw orders data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/orders/
+        columns:
+          - name: order_id
+            description: |
+              Surrogate key: Technical identifier from source system.
+              Auto-generated unique ID with no business meaning.
+              Used for internal database operations and foreign key relationships.
+            meta:
+              key_type: surrogate
+            tests:
+              - unique
+              - not_null
+
+      # ------------------------------------------------------------------------
+      # ORDER LINES - order lines master data
+      # ------------------------------------------------------------------------
+      - name: order_lines
+        description: "Raw order_lines data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/order_lines/
+
+
+      # ------------------------------------------------------------------------
+      # SHIPMENTS - shipments master data
+      # ------------------------------------------------------------------------
+      - name: shipments
+        description: "Raw shipments data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/shipments/
+
+
+      # ------------------------------------------------------------------------
+      # RETURNS - returns master data
+      # ------------------------------------------------------------------------
+      - name: returns
+        description: "Raw shipments data from bronze layer"
+        loaded_at_field: ingestion_ts
+        meta:
+          file_format: delta
+          file_path: ../lake/bronze/delta/returns/
 
   # ============================================================================
   # PARQUET SOURCES - Analytical optimization

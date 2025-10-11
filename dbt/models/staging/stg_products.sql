@@ -1,7 +1,7 @@
-WITH src AS (
+WITH source AS (
   SELECT * FROM {{ source_reader('bronze_delta', 'products') }}
 ),
-typed AS (
+cleaned AS (
   SELECT
     {{ safe_cast('product_id', 'bigint') }} AS product_id,
     {{ trim_string('sku') }} AS sku,
@@ -10,9 +10,10 @@ typed AS (
     {{ trim_string('subcategory') }} AS subcategory,
     {{ safe_cast('current_price', 'decimal(12,4)') }} AS current_price,
     {{ trim_string('currency') }} AS currency,
-    {{ handle_null('is_discontinued', 'false') }} AS is_discontinued,
+    {{ safe_cast(handle_null('is_discontinued', 'false'), 'boolean') }} AS is_discontinued,
     {{ safe_cast('introduced_dt', 'date') }} AS introduced_dt,
-    {{ safe_cast('discontinued_dt', 'date') }} AS discontinued_dt
-  FROM src
+    {{ safe_cast('discontinued_dt', 'date') }} AS discontinued_dt,
+    ingestion_ts
+  FROM source
 )
-SELECT * FROM typed
+SELECT * FROM cleaned
