@@ -189,3 +189,5 @@ test_output/
 test_data/
 
 .gitignore.original
+
+dbt_packages/
