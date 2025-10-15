@@ -191,3 +191,5 @@ test_data/
 .gitignore.original
 
 dbt_packages/
+package-lock.yml
+lake/_rejects
