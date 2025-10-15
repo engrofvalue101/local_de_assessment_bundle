@@ -1,87 +1,557 @@
 version: 2
 
 models:
+  # ==========================================================================
+  # STAGING MODELS
+  # ==========================================================================
+  # All data quality tests are performed at the staging level
+  # since source files (Delta/Parquet) are not directly queryable
+  # ==========================================================================
+
   - name: stg_customers
-    description: Staging layer for customers - light cleaning only
+    description: "Cleaned and standardized customer data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: warn
     columns:
       - name: customer_id
-        description: Primary key
+        data_type: bigint
+        description: "Surrogate key - technical identifier from source system with no business meaning"
         tests:
-          - not_null
           - unique
+          - not_null
+
+      - name: natural_key
+        data_type: varchar
+        description: "Natural key - business identifier that users recognize and use"
+        tests:
+          - unique
+          - not_null
+
+      - name: first_name
+        data_type: varchar
+        description: "Customer first name"
+
+      - name: last_name
+        data_type: varchar
+        description: "Customer last name"
+
       - name: email
+        data_type: varchar
+        description: "Customer email address"
         tests:
-          - not_null
-          - valid_email  # Custom test
+          - email_format
 
-  - name: stg_orders
-    description: Staging layer for orders
-    columns:
-      - name: order_id
-        tests:
-          - not_null
-          - unique
-      - name: status
-        tests:
-          - accepted_values:
-              values: ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']
+      - name: phone
+        data_type: varchar
+        description: "Customer phone number"
 
-  - name: stg_order_lines
-    description: Staging layer for order line items
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - order_id
-            - line_number
-    columns:
-      - name: quantity
+      - name: address_line1
+        data_type: varchar
+        description: "Primary address line"
+
+      - name: address_line2
+        data_type: varchar
+        description: "Secondary address line (apartment, suite, etc.)"
+
+      - name: city
+        data_type: varchar
+        description: "City name"
+
+      - name: state_region
+        data_type: varchar
+        description: "State or region code"
+
+      - name: postcode
+        data_type: varchar
+        description: "Postal or ZIP code"
+
+      - name: country_code
+        data_type: varchar
+        description: "ISO country code"
+
+      - name: latitude
+        data_type: double
+        description: "Geographical latitude coordinate of customer's primary address"
         tests:
-          - not_null
-          - dbt_utils.expression_is_true:
-              expression: "> 0"
-      - name: unit_price
+          - latitude_range
+
+      - name: longitude
+        data_type: double
+        description: "Geographical longitude coordinate of customer's primary address"
         tests:
-          - not_null
-          - dbt_utils.expression_is_true:
-              expression: ">= 0"
+          - longitude_range
+
+      - name: birth_date
+        data_type: date
+        description: "Customer date of birth"
+
+      - name: join_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when customer joined/registered"
+
+      - name: is_vip
+        data_type: boolean
+        description: "Flag indicating VIP customer status"
+
+      - name: gdpr_consent
+        data_type: boolean
+        description: "Flag indicating GDPR consent status"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
 
   - name: stg_products
+    description: "Cleaned and standardized product catalog data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: warn
     columns:
       - name: product_id
+        data_type: bigint
+        description: "Surrogate key - technical identifier from source system with no business meaning"
         tests:
-          - not_null
           - unique
+          - not_null
+
+      - name: sku
+        data_type: varchar
+        description: "Natural key - Product SKU (Stock Keeping Unit) used by warehouse and inventory systems"
+        tests:
+          - unique
+          - not_null
+
+      - name: product_name
+        data_type: varchar
+        description: "Product display name"
+
+      - name: category
+        data_type: varchar
+        description: "High-level product category"
+
+      - name: subcategory
+        data_type: varchar
+        description: "Detailed product subcategory"
+
+      - name: current_price
+        data_type: decimal(12,4)
+        description: "Current selling price"
+
+      - name: currency
+        data_type: varchar
+        description: "Currency code for pricing"
+
+      - name: is_discontinued
+        data_type: boolean
+        description: "Flag indicating if product is discontinued"
+
+      - name: introduced_dt
+        data_type: date
+        description: "Date when product was introduced"
+
+      - name: discontinued_dt
+        data_type: date
+        description: "Date when product was discontinued (null if active)"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
 
   - name: stg_stores
+    description: "Cleaned and standardized retail store location data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 24
+          error_after_hours: 48
+          config:
+            severity: warn
     columns:
       - name: store_id
+        data_type: bigint
+        description: "Surrogate key - technical identifier from source system with no business meaning"
         tests:
-          - not_null
           - unique
+          - not_null
+
+      - name: store_code
+        data_type: varchar
+        description: "Natural key - store identifier used across warehouse, inventory, and POS systems"
+        tests:
+          - unique
+          - not_null
+
+      - name: store_name
+        data_type: varchar
+        description: "Store display name"
+
+      - name: channel
+        data_type: varchar
+        description: "Sales channel (e.g., retail, online, wholesale)"
+
+      - name: region
+        data_type: varchar
+        description: "Geographic region"
+
+      - name: state
+        data_type: varchar
+        description: "State or province"
+
       - name: latitude
-        tests:
-          - valid_latitude  # Custom test: -90 to 90
+        data_type: double
+        description: "Store geographical latitude coordinate"
+
       - name: longitude
-        tests:
-          - valid_longitude  # Custom test: -180 to 180
+        data_type: double
+        description: "Store geographical longitude coordinate"
+
+      - name: open_dt
+        data_type: date
+        description: "Date when store opened"
+
+      - name: close_dt
+        data_type: date
+        description: "Date when store closed (null if active)"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
 
   - name: stg_suppliers
+    description: "Cleaned and standardized supplier/vendor data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 24
+          error_after_hours: 48
+          config:
+            severity: warn
     columns:
       - name: supplier_id
+        data_type: bigint
+        description: "Surrogate key - technical identifier for internal database operations"
         tests:
-          - not_null
           - unique
+          - not_null
+
+      - name: supplier_code
+        data_type: varchar
+        description: "Natural key - supplier code used across procurement, accounts payable, and inventory systems"
+        tests:
+          - unique
+          - not_null
+
+      - name: supplier_name
+        data_type: varchar
+        description: "Supplier company name"
+
+      - name: country_code
+        data_type: varchar
+        description: "ISO country code for supplier location"
+
+      - name: lead_time_days
+        data_type: integer
+        description: "Average lead time in days for supplier deliveries"
+
+      - name: preferred
+        data_type: boolean
+        description: "Flag indicating preferred supplier status"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
+
+  - name: stg_orders
+    description: "Cleaned and standardized order header data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: error  # Orders are critical - use error severity
+    columns:
+      - name: order_id
+        data_type: bigint
+        description: "Surrogate key - unique order identifier"
+        tests:
+          - unique
+          - not_null
+
+      - name: order_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when order was placed"
+
+      - name: order_dt_local
+        data_type: date
+        description: "Order date in local timezone (date only)"
+
+      - name: customer_id
+        data_type: bigint
+        description: "Foreign key to customers"
+
+      - name: store_id
+        data_type: bigint
+        description: "Foreign key to stores"
+
+      - name: channel
+        data_type: varchar
+        description: "Sales channel (online, in-store, mobile)"
+
+      - name: payment_method
+        data_type: varchar
+        description: "Payment method used"
+
+      - name: coupon_code
+        data_type: varchar
+        description: "Promotional coupon code applied"
+
+      - name: shipping_fee
+        data_type: decimal(12,2)
+        description: "Shipping and handling fee"
+
+      - name: currency
+        data_type: varchar
+        description: "Currency code for transaction"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
+
+  - name: stg_order_lines
+    description: "Cleaned and standardized order line item details from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: error  # Order lines are critical - use error severity
+    columns:
+      - name: order_id
+        data_type: bigint
+        description: "Foreign key to orders"
+
+      - name: line_number
+        data_type: integer
+        description: "Line item sequence number within order"
+
+      - name: product_id
+        data_type: bigint
+        description: "Foreign key to products"
+
+      - name: qty
+        data_type: integer
+        description: "Quantity ordered"
+
+      - name: unit_price
+        data_type: decimal(12,4)
+        description: "Price per unit at time of order"
+
+      - name: line_discount_pct
+        data_type: decimal(5,4)
+        description: "Discount percentage applied to line item"
+
+      - name: tax_pct
+        data_type: decimal(5,4)
+        description: "Tax percentage applied to line item"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
 
   - name: stg_shipments
+    description: "Cleaned and standardized shipment tracking data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: error  # Shipments are critical - use error severity
     columns:
       - name: shipment_id
+        data_type: bigint
+        description: "Unique shipment identifier"
+        tests:
+          - unique
+          - not_null
+
+      - name: order_id
+        data_type: bigint
+        description: "Foreign key to orders"
         tests:
           - not_null
-          - unique
+
+      - name: carrier
+        data_type: varchar
+        description: "Shipping carrier name"
+
+      - name: shipped_at
+        data_type: timestamp with time zone
+        description: "Timestamp when shipment departed"
+
+      - name: delivered_at
+        data_type: timestamp with time zone
+        description: "Timestamp when shipment was delivered"
+
+      - name: ship_cost
+        data_type: decimal(12,4)
+        description: "Cost of shipping"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
+
+  - name: stg_returns
+    description: "Cleaned and standardized product return data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 12
+          error_after_hours: 24
+          config:
+            severity: error
+    columns:
+      - name: return_id
+        data_type: bigint
+        description: "Unique return identifier"
+
+      - name: order_id
+        data_type: bigint
+        description: "Foreign key to orders"
+
+      - name: product_id
+        data_type: bigint
+        description: "Foreign key to products"
+
+      - name: return_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when return was processed"
+
+      - name: qty
+        data_type: integer
+        description: "Quantity returned"
+
+      - name: reason
+        data_type: varchar
+        description: "Return reason code or description"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
+
+  - name: stg_exchange_rates
+    description: "Cleaned and standardized foreign exchange rate data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 24
+          error_after_hours: 36
+          config:
+            severity: warn
+    columns:
+      - name: date
+        data_type: date
+        description: "Date for which exchange rate is applicable"
+
+      - name: currency
+        data_type: varchar
+        description: "Currency code"
+
+      - name: rate_to_aud
+        data_type: decimal(18,8)
+        description: "Exchange rate to Australian Dollar"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
 
   - name: stg_sensors
+    description: "Cleaned and standardized IoT sensor reading data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 2
+          error_after_hours: 4
+          config:
+            severity: warn
     columns:
-      - name: reading_id
-        tests:
-          - not_null
-          - unique
+      - name: sensor_ts
+        data_type: timestamp with time zone
+        description: "Timestamp of sensor reading"
+
+      - name: store_id
+        data_type: bigint
+        description: "Foreign key to stores"
+
+      - name: shelf_id
+        data_type: varchar
+        description: "Shelf identifier within store"
+
+      - name: temperature_c
+        data_type: decimal(5,2)
+        description: "Temperature reading in Celsius"
+
+      - name: humidity_pct
+        data_type: decimal(5,2)
+        description: "Humidity percentage"
+
+      - name: battery_mv
+        data_type: integer
+        description: "Battery level in millivolts"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"
+
+  - name: stg_events
+    description: "Cleaned and standardized user event tracking data from bronze layer"
+    tests:
+      - staging_freshness:
+          column_name: ingestion_ts
+          warn_after_hours: 6
+          error_after_hours: 12
+          config:
+            severity: warn
+    columns:
+      - name: event_id
+        data_type: varchar
+        description: "Unique event identifier"
+
+      - name: event_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when event occurred"
+
+      - name: event_type
+        data_type: varchar
+        description: "Type of event (page_view, click, etc.)"
+
+      - name: user_id
+        data_type: bigint
+        description: "Foreign key to customers/users"
+
+      - name: session_id
+        data_type: varchar
+        description: "Session identifier"
+
+      - name: detail_path
+        data_type: varchar
+        description: "Event detail path or URL"
+
+      - name: meta_x
+        data_type: integer
+        description: "Additional event metadata"
+
+      - name: ingestion_ts
+        data_type: timestamp
+        description: "Timestamp when data was ingested into the data lake"

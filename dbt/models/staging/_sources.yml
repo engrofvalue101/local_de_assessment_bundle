@@ -17,8 +17,8 @@ sources:
       file_format: delta
       purpose: "ACID transactions, incremental updates, time travel capabilities"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
     
     tables:
       # ------------------------------------------------------------------------
@@ -30,39 +30,6 @@ sources:
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/customers/
-        columns:
-          - name: customer_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: natural_key
-            description: |
-              Natural key: Business identifier for customers.
-              This is the key that business users recognize and use.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null
-          - name: email
-            description: "Customer email address"
-            tests:
-              - not_null
-              - email_format
-          - name: latitude
-            description: "Geographical latitude coordinate of customer's primary address"
-            tests:
-              - latitude_range
-          - name: longitude
-            description: "Geographical longitude coordinate of customer's primary address"
-            tests:
-              - longitude_range
 
       # ------------------------------------------------------------------------
       # PRODUCTS - Product catalog and inventory data
@@ -73,26 +40,6 @@ sources:
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/products/
-        columns:
-          - name: product_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: sku
-            description: |
-              Natural key: Product SKU (Stock Keeping Unit).
-              Business identifier used by warehouse and inventory systems.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null
 
       # ------------------------------------------------------------------------
       # STORES - Retail location master data
@@ -103,27 +50,6 @@ sources:
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/stores/
-        columns:
-          - name: store_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: store_code
-            description: |
-              Natural key: Store identifier code
-              Business identifier used to uniquely identify retail locations across 
-              warehouse, inventory, and point-of-sale systems.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null
 
       # ------------------------------------------------------------------------
       # SUPPLIERS - Vendor and supplier master data
@@ -134,32 +60,9 @@ sources:
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/suppliers/
-        columns:
-          - name: supplier_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-              Used for internal database operations and foreign key relationships.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: supplier_code
-            description: |
-              Natural key: Supplier identifier code
-              Business identifier used to uniquely identify suppliers across procurement,
-              accounts payable, and inventory systems. This is the code vendors use on
-              invoices and purchase orders.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null
 
       # ------------------------------------------------------------------------
-      # EXCHANGE RATES - foreign currencies exchange rates master data
+      # EXCHANGE RATES - Foreign currencies exchange rates master data
       # ------------------------------------------------------------------------
       - name: exchange_rates
         description: "Raw exchange_rates data from bronze layer"
@@ -168,9 +71,8 @@ sources:
           file_format: delta
           file_path: ../lake/bronze/delta/exchange_rates/
 
-
       # ------------------------------------------------------------------------
-      # SENSORS - sensor readings master data
+      # SENSORS - Sensor readings master data
       # ------------------------------------------------------------------------
       - name: sensors
         description: "Raw sensors data from bronze layer"
@@ -180,7 +82,7 @@ sources:
           file_path: ../lake/bronze/delta/sensors/
 
       # ------------------------------------------------------------------------
-      # EVENTS - events master data
+      # EVENTS - Events master data
       # ------------------------------------------------------------------------
       - name: events
         description: "Raw events data from bronze layer"
@@ -190,7 +92,7 @@ sources:
           file_path: ../lake/bronze/delta/events/
 
       # ------------------------------------------------------------------------
-      # ORDERS - orders master data
+      # ORDERS - Orders master data
       # ------------------------------------------------------------------------
       - name: orders
         description: "Raw orders data from bronze layer"
@@ -198,20 +100,9 @@ sources:
         meta:
           file_format: delta
           file_path: ../lake/bronze/delta/orders/
-        columns:
-          - name: order_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-              Used for internal database operations and foreign key relationships.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
 
       # ------------------------------------------------------------------------
-      # ORDER LINES - order lines master data
+      # ORDER LINES - Order lines master data
       # ------------------------------------------------------------------------
       - name: order_lines
         description: "Raw order_lines data from bronze layer"
@@ -220,9 +111,8 @@ sources:
           file_format: delta
           file_path: ../lake/bronze/delta/order_lines/
 
-
       # ------------------------------------------------------------------------
-      # SHIPMENTS - shipments master data
+      # SHIPMENTS - Shipments master data
       # ------------------------------------------------------------------------
       - name: shipments
         description: "Raw shipments data from bronze layer"
@@ -231,12 +121,11 @@ sources:
           file_format: delta
           file_path: ../lake/bronze/delta/shipments/
 
-
       # ------------------------------------------------------------------------
-      # RETURNS - returns master data
+      # RETURNS - Returns master data
       # ------------------------------------------------------------------------
       - name: returns
-        description: "Raw shipments data from bronze layer"
+        description: "Raw returns data from bronze layer"
         loaded_at_field: ingestion_ts
         meta:
           file_format: delta
@@ -258,57 +147,14 @@ sources:
       purpose: "Optimized for analytical workloads and columnar compression"
     
     tables:
-      # Note: Only customers and products available in Parquet format
-      # Stores and suppliers use Delta format exclusively for transactional consistency
-      
       - name: customers
         description: "Raw customer data from bronze layer"
         meta:
           file_format: parquet
           file_path: ../lake/bronze/parquet/customers/
-        columns:
-          - name: customer_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: natural_key
-            description: |
-              Natural key: Business identifier for customers.
-              This is the key that business users recognize and use.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null
 
       - name: products
         description: "Raw products data from bronze layer"
         meta:
           file_format: parquet
           file_path: ../lake/bronze/parquet/products/
-        columns:
-          - name: product_id
-            description: |
-              Surrogate key: Technical identifier from source system.
-              Auto-generated unique ID with no business meaning.
-            meta:
-              key_type: surrogate
-            tests:
-              - unique
-              - not_null
-          - name: sku
-            description: |
-              Natural key: Product SKU (Stock Keeping Unit).
-              Business identifier used by warehouse and inventory systems.
-            meta:
-              key_type: natural
-              business_key: true
-            tests:
-              - unique
-              - not_null

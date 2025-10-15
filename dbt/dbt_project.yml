@@ -12,13 +12,15 @@ macro-paths: ['macros']
 seed-paths: ['seeds']
 target-path: 'target'
 clean-targets: ['target']
-
+tests:
+  +store_failures: true  # Store all failed test results
+  +schema: dbt_test_failures  # Custom schema for failures
 models:
   local_de_assessment:
-    +materialized: table         # Applies to ALL models
     
     staging:
       +schema: stg
+      materialized: view  
       #+contract:
         #enforced: true           # Only staging has contracts
     
