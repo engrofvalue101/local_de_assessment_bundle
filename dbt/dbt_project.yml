@@ -15,6 +15,10 @@ clean-targets: ['target']
 tests:
   +store_failures: true  # Store all failed test results
   +schema: dbt_test_failures  # Custom schema for failures
+
+##on-run-start:
+##  - "{{ create_bronze_views() }}"
+
 models:
   local_de_assessment:
     

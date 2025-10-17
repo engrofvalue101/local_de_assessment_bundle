@@ -1,12 +1,28 @@
+-- models/staging/stg_exchange_rates.sql
+{{
+    config(
+        materialized='view'
+    )
+}}
+
 WITH source AS (
   SELECT * FROM {{ source_reader('bronze_delta', 'exchange_rates') }}
 ),
-cleaned AS (
+
+renamed AS (
   SELECT
-    {{ safe_cast('date', 'date') }} AS date,
+    -- Date and currency
+    {{ safe_cast('date', 'date') }} AS rate_date,
     {{ trim_string('currency') }} AS currency,
+
+    -- Rate
     {{ safe_cast('rate_to_aud', 'decimal(18,8)') }} AS rate_to_aud,
-    ingestion_ts
+
+    -- Audit columns
+    ingestion_ts,
+    src_filename,
+    src_row_hash
   FROM source
 )
-SELECT * FROM cleaned
+
+SELECT * FROM renamed
