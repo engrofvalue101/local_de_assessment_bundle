@@ -24,7 +24,7 @@ renamed  AS (
     {{ safe_cast('battery_mv', 'integer') }} AS battery_mv,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
 

@@ -26,7 +26,7 @@ renamed  AS (
     {{ trim_string('currency') }} AS currency,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
 

@@ -25,7 +25,7 @@ renamed AS (
     {{ parse_json_payload('payload_json', 'details.meta.x', 'int') }} AS meta_x,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
 

@@ -23,7 +23,7 @@ renamed AS (
     {{ safe_cast('tax_pct', 'decimal(5,4)') }} AS tax_pct,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
 

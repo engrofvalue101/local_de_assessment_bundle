@@ -40,7 +40,7 @@ renamed AS (
     {{ safe_cast(handle_null('gdpr_consent', 'false'), 'boolean') }} AS gdpr_consent,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
     

@@ -19,7 +19,7 @@ renamed AS (
     {{ safe_cast('rate_to_aud', 'decimal(18,8)') }} AS rate_to_aud,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
   FROM source

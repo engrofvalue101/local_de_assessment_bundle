@@ -22,7 +22,7 @@ renamed AS (
     {{ safe_cast(handle_null('preferred', 'false'), 'boolean') }} AS preferred,
 
     -- Audit columns
-    ingestion_ts,
+    {{ convert_to_utc('ingestion_ts') }} AS ingestion_ts,
     src_filename,
     src_row_hash
 
