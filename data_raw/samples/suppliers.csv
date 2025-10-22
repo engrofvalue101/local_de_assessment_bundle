@@ -1,0 +1,17 @@
+supplier_id,supplier_code,name,country_code,lead_time_days,preferred
+1,SUPP-ENV5SN,Miller-Christensen,TH,89,False
+2,SUPP-J88QEO,Brown Group,ID,66,False
+3,SUPP-Z4Z7WH,Daniels and Sons,TH,38,False
+4,SUPP-7EZ9GT,Huang LLC,ID,42,False
+5,SUPP-1UU7ZY,Clayton-Martinez,PH,69,False
+6,SUPP-43SAFY,"Wright, Wise and Ramos",CN,35,False
+7,SUPP-FKJ4YK,"Vang, Gonzalez and Moss",PH,70,True
+8,SUPP-3D5050,Boyd and Sons,TH,50,False
+9,SUPP-22KX7N,Price-Ali,PH,88,False
+10,SUPP-TAJW25,Moore-Chandler,PH,29,False
+11,SUPP-ZX1TV1,"Pineda, Meyer and King",CN,38,False
+12,SUPP-9C80EB,"Evans, Ward and Williams",US,72,False
+13,SUPP-F4AQ7B,"Robinson, Rodriguez and Chen",US,77,True
+14,SUPP-7WXRUM,Smith-Bauer,PH,41,False
+15,SUPP-8S2FTO,"Wilson, Mccormick and Smith",US,29,False
+16,SUPP-XLK8WR,Perkins Ltd,TH,84,True
