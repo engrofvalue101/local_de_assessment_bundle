@@ -149,7 +149,7 @@ cython_debug/
 #lake/
 #duckdb/
 #analytics/*.pbix
-# *.duckdb
+*.duckdb
 *.duckdb.wal
 duckdb.zip
 

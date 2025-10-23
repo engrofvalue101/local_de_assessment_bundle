@@ -1,0 +1,772 @@
+version: 2
+
+models:
+  # ==================== DIMENSIONS ====================
+  
+  - name: dim_date
+    description: "Comprehensive date dimension with calendar and fiscal attributes (15 years: 2015-2029)"
+    columns:
+      - name: date_key
+        description: "Surrogate key for date dimension"
+        tests:
+          - unique
+          - not_null
+      - name: date_day
+        description: "Actual calendar date"
+        tests:
+          - unique
+          - not_null
+      - name: year
+        tests:
+          - not_null
+      - name: fiscal_year
+        description: "Australian fiscal year (July-June)"
+        tests:
+          - not_null
+      - name: is_weekend
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: is_holiday
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: is_business_day
+        description: "True if weekday and not a holiday"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
+  - name: dim_customers
+    description: "Customer dimension with GDPR-compliant PII masking and behavioral metrics (SCD Type 2)"
+    columns:
+      - name: customer_key
+        description: "Surrogate key for customer dimension"
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Natural business key for customer"
+        tests:
+          - not_null
+      - name: dbt_scd_id
+        description: "Unique identifier for this SCD record version"
+        tests:
+          - unique
+          - not_null
+      - name: is_current
+        description: "Flag indicating if this is the current version"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: email
+        description: "Customer email - masked if GDPR consent is false"
+        tests:
+          - not_null
+      - name: gdpr_consent
+        description: "Customer consent for data processing"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: customer_age
+        description: "Current age of customer"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN 0 AND 120"
+              config:
+                severity: warn
+      - name: age_group
+        description: "Age range categorization"
+        tests:
+          - accepted_values:
+              values: ['<18', '18-24', '25-34', '35-44', '45-54', '55-64', '65+']
+      - name: customer_segment
+        description: "Customer segment based on VIP status and tenure"
+        tests:
+          - accepted_values:
+              values: ['VIP New', 'VIP Established', 'VIP Veteran', 'Regular New', 'Regular Established', 'Regular Veteran']
+      - name: value_segment
+        description: "Customer value segmentation based on lifetime revenue"
+        tests:
+          - accepted_values:
+              values: ['VIP', 'High Value', 'Medium Value', 'Repeat', 'One-time', 'Prospect']
+      - name: recency_status
+        description: "Customer activity recency classification"
+        tests:
+          - accepted_values:
+              values: ['Active', 'Recent', 'Lapsing', 'At Risk', 'Inactive']
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "dbt_valid_from <= COALESCE(dbt_valid_to, CURRENT_TIMESTAMP)"
+          config:
+            severity: error
+
+  - name: dim_product_scd
+    description: "Product dimension with SCD Type 2 tracking price and attribute changes"
+    columns:
+      - name: product_key
+        description: "Surrogate key for product dimension (includes version)"
+        tests:
+          - unique
+          - not_null
+      - name: product_id
+        description: "Natural business key for product"
+        tests:
+          - not_null
+      - name: dbt_scd_id
+        description: "Unique identifier for this SCD record version"
+        tests:
+          - unique
+          - not_null
+      - name: product_name
+        tests:
+          - not_null
+      - name: is_current
+        description: "Flag indicating if this is the current version"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: version_number
+        description: "Sequential version number for this product"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: price_tier
+        description: "Price categorization"
+        tests:
+          - accepted_values:
+              values: ['Low', 'Medium', 'High', 'Premium']
+      - name: price_change_type
+        description: "Type of price change from previous version"
+        tests:
+          - accepted_values:
+              values: ['Increased', 'Decreased', 'Unchanged', null]
+      - name: product_status
+        description: "Current status of product"
+        tests:
+          - accepted_values:
+              values: ['Discontinued', 'Historical', 'Active']
+      - name: is_discontinued
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "dbt_valid_from <= COALESCE(dbt_valid_to, CURRENT_TIMESTAMP)"
+          config:
+            severity: error
+
+  - name: dim_stores
+    description: "Store location dimension with geographic and operational attributes"
+    columns:
+      - name: store_key
+        description: "Surrogate key for store dimension"
+        tests:
+          - unique
+          - not_null
+      - name: store_id
+        description: "Natural business key for store"
+        tests:
+          - unique
+          - not_null
+      - name: store_name
+        tests:
+          - not_null
+      - name: store_code
+        tests:
+          - not_null
+      - name: channel
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['retail', 'online', 'wholesale']
+      - name: latitude
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN -90 AND 90"
+      - name: longitude
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN -180 AND 180"
+      - name: operational_status
+        tests:
+          - accepted_values:
+              values: ['New', 'Ramping', 'Established', 'Closed']
+      - name: climate_zone
+        description: "Climate classification based on latitude"
+        tests:
+          - accepted_values:
+              values: ['Tropical', 'Subtropical', 'Temperate', 'Cold']
+      - name: store_age_days
+        description: "Days since store opening"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+  - name: dim_suppliers
+    description: "Supplier dimension with geographic and performance attributes"
+    columns:
+      - name: supplier_key
+        description: "Surrogate key for supplier dimension"
+        tests:
+          - unique
+          - not_null
+      - name: supplier_id
+        description: "Natural business key for supplier"
+        tests:
+          - unique
+          - not_null
+      - name: supplier_name
+        tests:
+          - not_null
+      - name: supplier_code
+        tests:
+          - not_null
+      - name: supplier_tier
+        description: "Supplier performance tier based on lead time"
+        tests:
+          - accepted_values:
+              values: ['Tier 1 - Express', 'Tier 2 - Fast', 'Tier 3 - Standard', 'Tier 4 - Slow']
+      - name: supplier_region
+        description: "Geographic region classification"
+        tests:
+          - accepted_values:
+              values: ['North America', 'Europe', 'Asia Pacific', 'Oceania', 'Other']
+      - name: lead_time_category
+        tests:
+          - accepted_values:
+              values: ['Fast', 'Medium', 'Slow']
+      - name: supplier_status
+        tests:
+          - accepted_values:
+              values: ['Preferred', 'Standard']
+
+  # ==================== FACTS ====================
+
+  - name: fct_sales
+    description: |
+      Sales fact table with grain of one row per order line item.
+      Contains all financial metrics and relationships to customer, product, store, and date dimensions.
+    config:
+      materialized: incremental
+      unique_key: sale_key
+    columns:
+      - name: sale_key
+        description: "Surrogate key for this sale (order_id + line_number)"
+        tests:
+          - unique
+          - not_null
+      - name: customer_key
+        description: "Foreign key to dim_customers"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_key
+      - name: product_key
+        description: "Foreign key to dim_product_scd"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_product_scd')
+              field: product_key
+      - name: store_key
+        description: "Foreign key to dim_stores"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_stores')
+              field: store_key
+      - name: date_key
+        description: "Foreign key to dim_date"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: order_id
+        description: "Degenerate dimension - order identifier"
+        tests:
+          - not_null
+      - name: line_number
+        description: "Degenerate dimension - line item number"
+        tests:
+          - not_null
+      - name: channel
+        description: "Degenerate dimension - order channel"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['online', 'retail', 'wholesale']
+      - name: quantity
+        description: "Quantity of items sold"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: unit_price
+        description: "Price per unit"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: gross_amount
+        description: "Gross revenue before discounts"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: discount_amount
+        description: "Total discount applied"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: net_amount
+        description: "Net revenue after discounts"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: tax_amount
+        description: "Tax amount charged"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: total_amount
+        description: "Total amount including tax"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: discount_pct
+        description: "Discount percentage applied (stored as decimal)"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN 0 AND 1"
+      - name: has_discount
+        description: "Boolean flag indicating if discount was applied"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: discount_tier
+        description: "Categorization of discount level"
+        tests:
+          - accepted_values:
+              values: ['High', 'Medium', 'Low', 'None']
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "net_amount <= gross_amount"
+          config:
+            severity: error
+      - dbt_utils.expression_is_true:
+          expression: "gross_amount = quantity * unit_price"
+          config:
+            severity: warn
+
+  - name: fct_shipments
+    description: |
+      Shipments fact table with grain of one row per shipment.
+      Tracks delivery performance and SLA compliance.
+    config:
+      materialized: incremental
+      unique_key: shipment_key
+    columns:
+      - name: shipment_key
+        description: "Surrogate key for this shipment"
+        tests:
+          - unique
+          - not_null
+      - name: customer_key
+        description: "Foreign key to dim_customers"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_key
+      - name: store_key
+        description: "Foreign key to dim_stores"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_stores')
+              field: store_key
+      - name: ship_date_key
+        description: "Foreign key to dim_date for ship date"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: delivery_date_key
+        description: "Foreign key to dim_date for delivery date (null if in transit)"
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: shipment_id
+        description: "Degenerate dimension - shipment identifier"
+        tests:
+          - not_null
+      - name: order_id
+        description: "Degenerate dimension - related order"
+        tests:
+          - not_null
+      - name: carrier
+        description: "Shipping carrier name"
+        tests:
+          - not_null
+      - name: shipping_cost
+        description: "Cost of shipping"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: delivery_days
+        description: "Days from ship to delivery (null if in transit)"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+              config:
+                where: "delivery_days IS NOT NULL"
+      - name: is_on_time_delivery
+        description: "Boolean flag for SLA compliance"
+        tests:
+          - accepted_values:
+              values: [true, false, null]
+      - name: delivery_status
+        tests:
+          - accepted_values:
+              values: ['In Transit', 'On Time', 'Slightly Late', 'Delayed']
+      - name: carrier_tier
+        tests:
+          - accepted_values:
+              values: ['Premium', 'Standard', 'Other']
+
+  - name: fct_sensor_readings
+    description: |
+      Sensor readings fact table with grain of one row per store per hour.
+      Pre-aggregated hourly metrics with anomaly detection.
+    config:
+      materialized: incremental
+      unique_key: sensor_reading_key
+    columns:
+      - name: sensor_reading_key
+        description: "Surrogate key for this sensor reading hour"
+        tests:
+          - unique
+          - not_null
+      - name: store_key
+        description: "Foreign key to dim_stores"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_stores')
+              field: store_key
+      - name: date_key
+        description: "Foreign key to dim_date"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: reading_hour
+        description: "Timestamp truncated to hour"
+        tests:
+          - not_null
+      - name: reading_hour_of_day
+        description: "Hour of day (0-23)"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN 0 AND 23"
+      - name: avg_temperature_c
+        description: "Average temperature in Celsius for the hour"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN -50 AND 100"
+              config:
+                severity: warn
+      - name: min_temperature_c
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "<= avg_temperature_c"
+              config:
+                severity: warn
+      - name: max_temperature_c
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= avg_temperature_c"
+              config:
+                severity: warn
+      - name: avg_humidity_pct
+        description: "Average humidity percentage for the hour"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN 0 AND 100"
+              config:
+                severity: warn
+      - name: reading_count
+        description: "Number of readings aggregated"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: temp_anomaly_count
+        description: "Count of temperature anomalies detected"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: humidity_anomaly_count
+        description: "Count of humidity anomalies detected"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: has_anomaly
+        description: "Flag indicating any anomaly detected"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: temp_out_of_range
+        description: "Temperature outside normal range (15-30C)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: humidity_out_of_range
+        description: "Humidity outside normal range (30-70%)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: low_battery
+        description: "Battery level below threshold (2500mV)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
+  - name: fct_ingestion_audit
+    description: |
+      Ingestion audit fact table with grain of one row per table ingestion event.
+      Tracks pipeline health, performance, and data quality metrics.
+    config:
+      materialized: incremental
+      unique_key: audit_key
+    columns:
+      - name: audit_key
+        description: "Surrogate key for this audit record"
+        tests:
+          - unique
+          - not_null
+      - name: ingestion_date_key
+        description: "Foreign key to dim_date"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: table_name
+        description: "Name of the table ingested"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['customers', 'orders', 'order_lines', 'products', 'stores', 
+                       'suppliers', 'events', 'returns', 'shipments', 'sensors', 
+                       'exchange_rates']
+      - name: ingestion_ts
+        description: "Timestamp of ingestion"
+        tests:
+          - not_null
+      - name: rows_processed
+        description: "Total rows processed from source"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: rows_rejected
+        description: "Rows rejected due to quality issues"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: rows_accepted
+        description: "Rows successfully accepted"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: reject_rate_pct
+        description: "Percentage of rows rejected"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "BETWEEN 0 AND 100"
+      - name: processing_time_seconds
+        description: "Time taken to process the file"
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: data_quality_tier
+        description: "Overall quality assessment"
+        tests:
+          - accepted_values:
+              values: ['Excellent', 'Good', 'Fair', 'Poor']
+      - name: processing_status
+        description: "Status of the ingestion"
+        tests:
+          - accepted_values:
+              values: ['SUCCESS', 'EMPTY']
+      - name: is_success
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: has_rejects
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "rows_processed = rows_accepted + rows_rejected"
+          config:
+            severity: error
+
+  # ==================== BUSINESS VIEWS ====================
+
+  - name: vw_sales_summary
+    description: |
+      Business-friendly sales view with denormalized dimensions.
+      Hides technical surrogate keys and provides readable column names.
+      Joins fct_sales with all dimension tables for easy querying.
+    config:
+      materialized: view
+
+  - name: vw_customer_analytics
+    description: |
+      Customer analytics view with RFM segmentation and lifecycle stages.
+      Includes customer lifecycle stage calculation (Champions, Loyal, At Risk, etc.).
+      Ready for business intelligence and customer analysis.
+    config:
+      materialized: view
+    columns:
+      - name: customer_lifecycle_stage
+        description: "RFM-based customer lifecycle classification"
+        tests:
+          - accepted_values:
+              values: ['Champions', 'Loyal Customers', 'Potential Loyalists', 
+                       'New Customers', 'At Risk High Value', 'At Risk', 
+                       'Lost High Value', 'Lost', 'Other']
+
+  - name: vw_product_performance
+    description: |
+      Product performance analytics view with sales metrics and performance tiers.
+      Includes product-level aggregations and categorizations.
+    config:
+      materialized: view
+    columns:
+      - name: sales_performance_tier
+        description: "Performance classification based on units sold"
+        tests:
+          - accepted_values:
+              values: ['No Sales', 'Low Performer', 'Average Performer', 
+                       'Good Performer', 'Top Performer']
+      - name: discount_dependency
+        description: "Classification of discount reliance"
+        tests:
+          - accepted_values:
+              values: ['Discount Dependent', 'Occasionally Discounted', 'Full Price Seller']
+
+  - name: vw_store_performance
+    description: |
+      Store performance view with operational and sales metrics.
+      Aggregates store-level KPIs for management reporting.
+    config:
+      materialized: view
+    columns:
+      - name: revenue_tier
+        description: "Store revenue classification"
+        tests:
+          - accepted_values:
+              values: ['Top Performer', 'Above Average', 'Average', 'Below Average', 'No Sales']
+
+  - name: vw_delivery_performance
+    description: |
+      Delivery and shipment performance view.
+      Tracks carrier performance and delivery timeliness.
+    config:
+      materialized: view
+    columns:
+      - name: delivery_speed
+        description: "Speed classification of delivery"
+        tests:
+          - accepted_values:
+              values: ['In Transit', 'Express', 'Standard', 'Slow', 'Very Slow']
+      - name: timeliness
+        description: "On-time performance classification"
+        tests:
+          - accepted_values:
+              values: ['On Time', 'Slightly Late', 'Late', 'Unknown']
+
+  - name: vw_operations_health
+    description: |
+      Operations health monitoring view for environmental sensors.
+      Provides alerts and status for store environmental conditions.
+    config:
+      materialized: view
+    columns:
+      - name: operational_status
+        description: "Overall operational health"
+        tests:
+          - accepted_values:
+              values: ['Issue Detected', 'Battery Warning', 'Healthy']
+      - name: alert_priority
+        description: "Priority level for alerts"
+        tests:
+          - accepted_values:
+              values: ['High Priority', 'Medium Priority', 'Low Priority', 'No Alert']
+
+  - name: vw_financial_summary
+    description: |
+      Financial metrics view with revenue, margin, and profitability calculations.
+      Includes estimated COGS and margin calculations for financial analysis.
+    config:
+      materialized: view
+    columns:
+      - name: transaction_value_tier
+        description: "Transaction value classification"
+        tests:
+          - accepted_values:
+              values: ['High Value Transaction', 'Medium Value Transaction', 
+                       'Low Value Transaction']
+
+  - name: vw_data_quality_dashboard
+    description: |
+      Data quality monitoring dashboard view.
+      Provides pipeline health metrics and data quality indicators.
+    config:
+      materialized: view
+    columns:
+      - name: pipeline_health
+        description: "Overall pipeline health status"
+        tests:
+          - accepted_values:
+              values: ['Empty File', 'Poor Quality', 'Quality Warning', 
+                       'Performance Warning', 'Healthy']
