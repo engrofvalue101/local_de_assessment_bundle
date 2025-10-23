@@ -30,6 +30,10 @@ select
     join_ts,
     is_vip,
     gdpr_consent,
+    customer_age,
+    customer_lifetime_days,
+    age_group,
+    customer_segment,
     
     -- Quality validation flags (track quality changes over time)
     has_null_customer_id,
