@@ -11,8 +11,48 @@
 WITH orders_raw AS (
     SELECT * FROM {{ ref('stg_orders') }}
     {% if is_incremental() %}
-        WHERE ingestion_ts > (SELECT MAX(ingestion_ts) FROM {{ this }})
+    WHERE ingestion_ts > (
+        SELECT COALESCE(MAX(ingestion_ts), '1900-01-01'::TIMESTAMP) 
+        FROM {{ this }}
+    )
     {% endif %}
+),
+-- Deduplication by order_id
+orders_with_validation AS (
+    SELECT
+        *,
+        
+        -- VALIDATION FLAGS
+        CASE WHEN order_id IS NULL THEN TRUE ELSE FALSE END AS has_null_order_id,
+        CASE WHEN customer_id IS NULL THEN TRUE ELSE FALSE END AS has_null_customer_id,
+        CASE WHEN order_ts IS NULL THEN TRUE ELSE FALSE END AS has_null_order_ts,
+        
+        -- Future order check
+        CASE WHEN order_ts > CURRENT_TIMESTAMP THEN TRUE ELSE FALSE END AS has_future_order_ts,
+        
+        -- Relationships will be validated via staging tests
+        CASE WHEN customer_id IS NOT NULL THEN FALSE ELSE FALSE END AS has_invalid_customer_relationship,
+        CASE WHEN store_id IS NOT NULL THEN FALSE ELSE FALSE END AS has_invalid_store_relationship,
+        
+        -- OVERALL VALIDITY FLAG
+        CASE 
+            WHEN order_id IS NULL THEN FALSE
+            WHEN customer_id IS NULL THEN FALSE
+            WHEN order_ts IS NULL THEN FALSE
+            WHEN order_ts > CURRENT_TIMESTAMP THEN FALSE
+            ELSE TRUE
+        END AS is_valid_record,
+        
+        -- QUALITY ISSUE TYPE
+        CASE
+            WHEN order_id IS NULL THEN 'Missing Order ID'
+            WHEN customer_id IS NULL THEN 'Missing Customer ID'
+            WHEN order_ts IS NULL THEN 'Missing Order Timestamp'
+            WHEN order_ts > CURRENT_TIMESTAMP THEN 'Future Order Timestamp'
+            ELSE NULL
+        END AS quality_issue_type
+        
+    FROM orders_raw
 ),
 
 -- Deduplication by order_id
@@ -23,7 +63,7 @@ orders_deduped AS (
             PARTITION BY order_id 
             ORDER BY ingestion_ts DESC
         ) AS row_num
-    FROM orders_raw
+    FROM orders_with_validation
 ),
 
 orders_base AS (
@@ -38,6 +78,17 @@ orders_base AS (
         coupon_code,
         shipping_fee,
         currency,
+        
+        -- Quality flags
+        has_null_order_id,
+        has_null_customer_id,
+        has_null_order_ts,
+        has_future_order_ts,
+        has_invalid_customer_relationship,
+        has_invalid_store_relationship,
+        is_valid_record,
+        quality_issue_type,
+        
         ingestion_ts,
         src_filename,
         src_row_hash
@@ -76,6 +127,16 @@ orders_enriched AS (
         o.shipping_fee,
         o.currency,
         
+        -- Quality flags
+        o.has_null_order_id,
+        o.has_null_customer_id,
+        o.has_null_order_ts,
+        o.has_future_order_ts,
+        o.has_invalid_customer_relationship,
+        o.has_invalid_store_relationship,
+        o.is_valid_record,
+        o.quality_issue_type,
+        
         -- Aggregated amounts from order lines
         COALESCE(ola.line_count, 0) AS line_count,
         COALESCE(ola.unique_product_count, 0) AS unique_product_count,
@@ -87,17 +148,15 @@ orders_enriched AS (
         COALESCE(ola.order_subtotal, 0) AS order_subtotal,
         COALESCE(ola.order_subtotal, 0) + COALESCE(o.shipping_fee, 0) AS order_total,
         
-        -- Derived: Time components
+        -- Derived fields (calculate for all, filter downstream)
         EXTRACT(HOUR FROM o.order_ts) AS order_hour,
         EXTRACT(DOW FROM o.order_ts) AS order_day_of_week,
         
-        -- Derived: Is weekend
         CASE 
             WHEN EXTRACT(DOW FROM o.order_ts) IN (0, 6) THEN TRUE 
             ELSE FALSE 
         END AS is_weekend,
         
-        -- Derived: Has coupon
         CASE 
             WHEN o.coupon_code IS NOT NULL THEN TRUE 
             ELSE FALSE 

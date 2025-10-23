@@ -10,6 +10,7 @@
     )
 }}
 
+-- Include validation flags to track data quality changes over time
 select
     customer_id,
     natural_key,
@@ -29,7 +30,21 @@ select
     join_ts,
     is_vip,
     gdpr_consent,
-    ingestion_ts
+    
+    -- Quality validation flags (track quality changes over time)
+    has_null_customer_id,
+    has_null_natural_key,
+    has_invalid_email_format,
+    has_invalid_latitude_range,
+    has_invalid_longitude_range,
+    is_valid_record,
+    quality_issue_type,
+    
+    -- Audit
+    ingestion_ts,
+    transformed_at
+    
 from {{ ref('silver_customers') }}
+-- where is_valid_record = TRUE
 
 {% endsnapshot %}

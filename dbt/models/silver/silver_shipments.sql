@@ -11,11 +11,61 @@
 WITH shipments_raw AS (
     SELECT * FROM {{ ref('stg_shipments') }}
     {% if is_incremental() %}
-        WHERE ingestion_ts > (SELECT MAX(ingestion_ts) FROM {{ this }})
+    WHERE ingestion_ts > (
+        SELECT COALESCE(MAX(ingestion_ts), '1900-01-01'::TIMESTAMP) 
+        FROM {{ this }}
+    )
     {% endif %}
 ),
 
 -- Get order context
+shipments_with_validation AS (
+    SELECT
+        *,
+        
+        -- VALIDATION FLAGS (based on staging tests)
+        CASE WHEN shipment_id IS NULL THEN TRUE ELSE FALSE END AS has_null_shipment_id,
+        CASE WHEN order_id IS NULL THEN TRUE ELSE FALSE END AS has_null_order_id,
+        
+        -- Relationship check
+        CASE WHEN order_id IS NOT NULL THEN FALSE ELSE FALSE END AS has_invalid_order_relationship,
+        
+        -- Logical checks
+        CASE 
+            WHEN delivered_at IS NOT NULL AND shipped_at IS NOT NULL 
+                AND delivered_at < shipped_at 
+            THEN TRUE 
+            ELSE FALSE 
+        END AS has_delivered_before_shipped,
+        
+        CASE WHEN shipped_at > CURRENT_TIMESTAMP THEN TRUE ELSE FALSE END AS has_future_shipped_at,
+        CASE WHEN delivered_at > CURRENT_TIMESTAMP THEN TRUE ELSE FALSE END AS has_future_delivered_at,
+        
+        -- OVERALL VALIDITY FLAG
+        CASE 
+            WHEN shipment_id IS NULL THEN FALSE
+            WHEN order_id IS NULL THEN FALSE
+            WHEN delivered_at IS NOT NULL AND shipped_at IS NOT NULL AND delivered_at < shipped_at THEN FALSE
+            WHEN shipped_at > CURRENT_TIMESTAMP THEN FALSE
+            WHEN delivered_at > CURRENT_TIMESTAMP THEN FALSE
+            ELSE TRUE
+        END AS is_valid_record,
+        
+        -- QUALITY ISSUE TYPE
+        CASE
+            WHEN shipment_id IS NULL THEN 'Missing Shipment ID'
+            WHEN order_id IS NULL THEN 'Missing Order ID'
+            WHEN delivered_at IS NOT NULL AND shipped_at IS NOT NULL AND delivered_at < shipped_at 
+                THEN 'Delivered Before Shipped'
+            WHEN shipped_at > CURRENT_TIMESTAMP THEN 'Future Shipped Timestamp'
+            WHEN delivered_at > CURRENT_TIMESTAMP THEN 'Future Delivered Timestamp'
+            ELSE NULL
+        END AS quality_issue_type
+        
+    FROM shipments_raw
+),
+
+-- Get order context (only valid orders)
 orders AS (
     SELECT 
         order_id,
@@ -26,6 +76,7 @@ orders AS (
         channel,
         currency
     FROM {{ ref('silver_orders') }}
+    WHERE is_valid_record = TRUE
 ),
 
 -- Enrichment
@@ -46,35 +97,41 @@ shipments_enriched AS (
         o.order_ts,
         o.order_dt_local,
         
-        -- Derived: Days from order to shipment
+        -- Quality flags
+        s.has_null_shipment_id,
+        s.has_null_order_id,
+        s.has_invalid_order_relationship,
+        s.has_delivered_before_shipped,
+        s.has_future_shipped_at,
+        s.has_future_delivered_at,
+        s.is_valid_record,
+        s.quality_issue_type,
+        
+        -- Derived fields
         CASE
             WHEN o.order_ts IS NOT NULL AND s.shipped_at IS NOT NULL
             THEN EXTRACT(DAY FROM (s.shipped_at - o.order_ts))
             ELSE NULL
         END AS days_to_ship,
         
-        -- Derived: Delivery time (days from shipment to delivery)
         CASE
             WHEN s.shipped_at IS NOT NULL AND s.delivered_at IS NOT NULL
             THEN EXTRACT(DAY FROM (s.delivered_at - s.shipped_at))
             ELSE NULL
         END AS delivery_days,
         
-        -- Derived: Total days from order to delivery
         CASE
             WHEN o.order_ts IS NOT NULL AND s.delivered_at IS NOT NULL
             THEN EXTRACT(DAY FROM (s.delivered_at - o.order_ts))
             ELSE NULL
         END AS total_fulfillment_days,
         
-        -- Derived: Shipment status
         CASE
             WHEN s.delivered_at IS NOT NULL THEN 'Delivered'
             WHEN s.shipped_at IS NOT NULL THEN 'In Transit'
             ELSE 'Pending'
         END AS shipment_status,
         
-        -- Derived: Carrier category
         CASE
             WHEN LOWER(s.carrier) IN ('fedex', 'ups', 'dhl', 'usps') THEN 'Major Carrier'
             WHEN LOWER(s.carrier) IN ('australia post', 'aus post') THEN 'National Post'
@@ -82,7 +139,6 @@ shipments_enriched AS (
             ELSE 'Other Carrier'
         END AS carrier_category,
         
-        -- Derived: Shipping cost band
         CASE
             WHEN s.ship_cost IS NULL THEN 'Unknown'
             WHEN s.ship_cost = 0 THEN 'Free Shipping'
@@ -93,7 +149,6 @@ shipments_enriched AS (
             ELSE 'Unknown'
         END AS shipping_cost_band,
         
-        -- Derived: Delivery speed category (based on delivery_days)
         CASE
             WHEN s.delivered_at IS NULL THEN 'Not Delivered'
             WHEN EXTRACT(DAY FROM (s.delivered_at - s.shipped_at)) <= 1 THEN 'Same/Next Day'
@@ -104,7 +159,6 @@ shipments_enriched AS (
             ELSE 'Unknown'
         END AS delivery_speed_category,
         
-        -- Derived: On-time delivery flag (assuming 5 days is standard)
         CASE
             WHEN s.delivered_at IS NOT NULL 
                 AND EXTRACT(DAY FROM (s.delivered_at - s.shipped_at)) <= 5 
@@ -115,11 +169,9 @@ shipments_enriched AS (
             ELSE NULL
         END AS is_on_time_delivery,
         
-        -- Derived: Time components for shipped_at
         EXTRACT(HOUR FROM s.shipped_at) AS shipped_hour,
         EXTRACT(DOW FROM s.shipped_at) AS shipped_day_of_week,
         
-        -- Derived: Is shipped on weekend
         CASE 
             WHEN EXTRACT(DOW FROM s.shipped_at) IN (0, 6) THEN TRUE 
             ELSE FALSE 
@@ -129,7 +181,7 @@ shipments_enriched AS (
         s.ingestion_ts,
         CURRENT_TIMESTAMP AS transformed_at
         
-    FROM shipments_raw s
+    FROM shipments_with_validation s
     LEFT JOIN orders o ON s.order_id = o.order_id
 )
 

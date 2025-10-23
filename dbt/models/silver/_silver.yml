@@ -2,597 +2,757 @@ version: 2
 
 models:
   # ==========================================================================
-  # INTERMEDIATE MODELS (Minimal - only where needed)
+  # SILVER MODELS - Data Quality Pattern
   # ==========================================================================
-  
-  - name: int_order_lines_enriched
-    description: "Order lines with calculated amounts - used for order aggregation"
-    config:
-      materialized: view
-    columns:
-      - name: order_id
-        description: "Foreign key to orders"
-        tests:
-          - not_null
-      - name: line_number
-        description: "Line sequence number"
-        tests:
-          - not_null
-      - name: product_id
-        description: "Foreign key to products"
-      - name: qty
-        description: "Quantity ordered"
-      - name: unit_price
-        description: "Price per unit"
-      - name: line_discount_pct
-        description: "Discount percentage (0-1)"
-      - name: tax_pct
-        description: "Tax percentage (0-1)"
-      - name: gross_amount
-        description: "qty * unit_price"
-      - name: discount_amount
-        description: "gross_amount * line_discount_pct"
-      - name: net_amount
-        description: "gross_amount - discount_amount"
-      - name: tax_amount
-        description: "net_amount * tax_pct"
-      - name: line_total
-        description: "net_amount + tax_amount"
-      - name: has_invalid_qty
-        description: "Flag for qty <= 0"
-      - name: has_invalid_price
-        description: "Flag for unit_price <= 0"
-      - name: has_invalid_discount
-        description: "Flag for discount outside 0-100%"
-      - name: is_valid_line
-        description: "Overall validity flag (qty>0, price>0, discount 0-100%)"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-
-  # ==========================================================================
-  # SILVER DIMENSION MODELS
+  # All silver models include validation flags based on staging tests
+  # Pattern: is_valid_record flag + individual quality flags
+  # This allows us to keep ALL data while filtering for quality downstream
   # ==========================================================================
 
   - name: silver_customers
-    description: "Cleaned, deduplicated, and enriched customer dimension"
-    config:
-      schema: silver
-      materialized: table
+    description: "Enriched customer data with quality validation flags. All data is preserved with is_valid_record flag for downstream filtering."
     columns:
       - name: customer_id
-        description: "Surrogate key from source system"
+        data_type: bigint
+        description: "Surrogate key"
         tests:
           - unique
           - not_null
+
       - name: natural_key
-        description: "Business key (CUST-XXXXXXXX)"
+        data_type: varchar
+        description: "Natural business key"
         tests:
           - unique
           - not_null
-      - name: first_name
-        description: "Customer first name"
-      - name: last_name
-        description: "Customer last name"
+
       - name: email
+        data_type: varchar
         description: "Customer email address"
-      - name: phone
-        description: "Customer phone number"
-      - name: address_line1
-        description: "Street address line 1"
-      - name: address_line2
-        description: "Street address line 2"
-      - name: city
-        description: "City"
-      - name: state_region
-        description: "State or region"
-      - name: postcode
-        description: "Postal code"
-      - name: country_code
-        description: "ISO country code"
+
       - name: latitude
-        description: "Geographic latitude"
+        data_type: double
+        description: "Geographical latitude"
+
       - name: longitude
-        description: "Geographic longitude"
-      - name: birth_date
-        description: "Customer date of birth"
-      - name: join_ts
-        description: "Timestamp when customer joined"
-      - name: is_vip
-        description: "VIP status flag"
-      - name: gdpr_consent
-        description: "GDPR consent flag"
-      - name: customer_age
-        description: "Age calculated from birth_date"
-      - name: customer_lifetime_days
-        description: "Days since customer joined"
-      - name: age_group
-        description: "Age bracket: Under 18, 18-24, 25-34, 35-44, 45-54, 55-64, 65+, Unknown"
-      - name: customer_segment
-        description: "VIP/Regular × New/Long Term"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: double
+        description: "Geographical longitude"
 
-  - name: silver_products
-    description: "Cleaned, deduplicated, and enriched product dimension"
-    config:
-      schema: silver
-      materialized: table
+      # QUALITY FLAGS
+      - name: has_null_customer_id
+        data_type: boolean
+        description: "Flag: customer_id is null (based on staging not_null test)"
+
+      - name: has_null_natural_key
+        data_type: boolean
+        description: "Flag: natural_key is null (based on staging unique/not_null test)"
+
+      - name: has_invalid_email_format
+        data_type: boolean
+        description: "Flag: email format is invalid (based on staging email_format test)"
+
+      - name: has_invalid_latitude_range
+        data_type: boolean
+        description: "Flag: latitude out of range -90 to 90 (based on staging latitude_range test)"
+
+      - name: has_invalid_longitude_range
+        data_type: boolean
+        description: "Flag: longitude out of range -180 to 180 (based on staging longitude_range test)"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks, FALSE otherwise"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid, NULL if valid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
+      - name: transformed_at
+        data_type: timestamp with time zone
+        description: "Timestamp when record was transformed in silver layer"
+
+  - name: silver_events
+    description: "Enriched event tracking data with quality validation flags and incremental loading via state table"
     columns:
-      - name: product_id
-        description: "Surrogate key from source system"
+      - name: event_id
+        data_type: varchar
+        description: "Unique event identifier"
         tests:
           - unique
           - not_null
-      - name: sku
-        description: "Business key (SKU-XXXXXX)"
-        tests:
-          - unique
-          - not_null
-      - name: product_name
-        description: "Product name"
-      - name: category
-        description: "Product category"
-      - name: subcategory
-        description: "Product subcategory"
-      - name: current_price
-        description: "Current product price"
-      - name: currency
-        description: "Currency code"
-      - name: is_discontinued
-        description: "Discontinued flag"
-      - name: introduced_dt
-        description: "Date product was introduced"
-      - name: discontinued_dt
-        description: "Date product was discontinued"
-      - name: product_age_days
-        description: "Days since product was introduced"
-      - name: product_lifespan_days
-        description: "Days from introduction to discontinuation (if discontinued)"
-      - name: price_tier
-        description: "Budget, Economy, Mid-Range, Premium, Luxury"
-      - name: lifecycle_stage
-        description: "New, Current, Mature, Discontinued"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
 
-  - name: silver_stores
-    description: "Cleaned, deduplicated, and enriched store dimension"
-    config:
-      schema: silver
-      materialized: table
-    columns:
-      - name: store_id
-        description: "Surrogate key from source system"
+      - name: event_ts
+        data_type: timestamp with time zone
+        description: "Event timestamp"
         tests:
-          - unique
           - not_null
-      - name: store_code
-        description: "Business key"
-        tests:
-          - unique
-          - not_null
-      - name: store_name
-        description: "Store name"
-      - name: channel
-        description: "Store channel"
-      - name: region
-        description: "Store region"
-      - name: state
-        description: "State"
-      - name: latitude
-        description: "Geographic latitude"
-      - name: longitude
-        description: "Geographic longitude"
-      - name: open_dt
-        description: "Store opening date"
-      - name: close_dt
-        description: "Store closing date (if closed)"
-      - name: store_age_days
-        description: "Days since store opened"
-      - name: store_status
-        description: "Active or Closed"
-      - name: operational_days
-        description: "Total days store has been operational"
-      - name: store_size_category
-        description: "Large, Medium, Small based on region"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
 
-  - name: silver_suppliers
-    description: "Cleaned, deduplicated, and enriched supplier dimension"
-    config:
-      schema: silver
-      materialized: table
-    columns:
-      - name: supplier_id
-        description: "Surrogate key from source system"
+      - name: event_type
+        data_type: varchar
+        description: "Type of event"
         tests:
-          - unique
           - not_null
-      - name: supplier_code
-        description: "Business key"
-        tests:
-          - unique
-          - not_null
-      - name: supplier_name
-        description: "Supplier name"
-      - name: country_code
-        description: "ISO country code"
-      - name: lead_time_days
-        description: "Lead time in days"
-      - name: preferred
-        description: "Preferred supplier flag"
-      - name: lead_time_category
-        description: "Express, Standard, Extended, Long Lead"
-      - name: supplier_tier
-        description: "Tier 1-5 based on preferred status and lead time"
-      - name: supplier_region
-        description: "Oceania, North America, Europe, Asia, Other"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
 
-  - name: silver_exchange_rates
-    description: "Daily exchange rates with rate changes"
-    config:
-      schema: silver
-      materialized: table
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - rate_date
-            - currency
-    columns:
-      - name: rate_date
-        description: "Date for exchange rate"
-        tests:
-          - not_null
-      - name: currency
-        description: "Currency code"
-        tests:
-          - not_null
-      - name: rate_to_aud
-        description: "Exchange rate from currency to AUD"
-      - name: aud_to_currency_rate
-        description: "Inverse rate (AUD to currency)"
-      - name: day_of_week
-        description: "Day of week (0=Sunday)"
-      - name: is_business_day
-        description: "True for Monday-Friday"
-      - name: rate_year
-        description: "Year of rate"
-      - name: rate_month
-        description: "Month of rate"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
-      - name: prev_day_rate
-        description: "Previous day's rate for this currency"
-      - name: rate_change
-        description: "Absolute change from previous day"
-      - name: rate_change_pct
-        description: "Percentage change from previous day"
+      - name: user_id
+        data_type: bigint
+        description: "Foreign key to customers"
 
-  # ==========================================================================
-  # SILVER FACT MODELS (Incremental)
-  # ==========================================================================
+      # QUALITY FLAGS
+      - name: has_invalid_user_relationship
+        data_type: boolean
+        description: "Flag: user_id doesn't exist in customers (based on staging relationships test)"
+
+      - name: has_null_event_id
+        data_type: boolean
+        description: "Flag: event_id is null"
+
+      - name: has_null_event_ts
+        data_type: boolean
+        description: "Flag: event_ts is null"
+
+      - name: has_null_event_type
+        data_type: boolean
+        description: "Flag: event_type is null"
+
+      - name: has_future_timestamp
+        data_type: boolean
+        description: "Flag: event_ts is in the future"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
 
   - name: silver_orders
-    description: "Order header fact with aggregated line totals"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: order_id
+    description: "Enriched order data with quality validation flags and incremental loading via state table"
     columns:
       - name: order_id
-        description: "Primary key"
+        data_type: bigint
+        description: "Unique order identifier"
         tests:
           - unique
           - not_null
+
       - name: customer_id
+        data_type: bigint
         description: "Foreign key to customers"
-      - name: store_id
-        description: "Foreign key to stores"
+        tests:
+          - not_null
+
       - name: order_ts
+        data_type: timestamp with time zone
         description: "Order timestamp"
-      - name: order_dt_local
-        description: "Order date in local timezone"
-      - name: channel
-        description: "Order channel"
-      - name: payment_method
-        description: "Payment method used"
-      - name: coupon_code
-        description: "Coupon code applied"
-      - name: shipping_fee
-        description: "Shipping fee charged"
-      - name: currency
-        description: "Currency code"
-      - name: line_count
-        description: "Number of lines in order"
-      - name: unique_product_count
-        description: "Number of distinct products"
-      - name: total_quantity
-        description: "Total quantity across all lines"
-      - name: order_gross_amount
-        description: "Sum of line gross amounts"
-      - name: order_discount_amount
-        description: "Sum of line discounts"
-      - name: order_net_amount
-        description: "Sum of line net amounts"
-      - name: order_tax_amount
-        description: "Sum of line taxes"
-      - name: order_subtotal
-        description: "Sum of line totals"
-      - name: order_total
-        description: "Order subtotal + shipping fee"
-      - name: order_hour
-        description: "Hour of day (0-23)"
-      - name: order_day_of_week
-        description: "Day of week (0=Sunday)"
-      - name: is_weekend
-        description: "True if Saturday or Sunday"
-      - name: has_coupon
-        description: "True if coupon code applied"
+        tests:
+          - not_null
+
+      # QUALITY FLAGS
+      - name: has_null_order_id
+        data_type: boolean
+        description: "Flag: order_id is null (based on staging not_null test)"
+
+      - name: has_null_customer_id
+        data_type: boolean
+        description: "Flag: customer_id is null (based on staging not_null test)"
+
+      - name: has_null_order_ts
+        data_type: boolean
+        description: "Flag: order_ts is null"
+
+      - name: has_future_order_ts
+        data_type: boolean
+        description: "Flag: order_ts is in the future"
+
+      - name: has_invalid_customer_relationship
+        data_type: boolean
+        description: "Flag: customer_id doesn't exist in customers (based on staging relationships test)"
+
+      - name: has_invalid_store_relationship
+        data_type: boolean
+        description: "Flag: store_id doesn't exist in stores (based on staging relationships test)"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
       - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
 
   - name: silver_order_lines
-    description: "Order line fact with product context and calculated amounts"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: ['order_id', 'line_number']
+    description: "Enriched order line data with quality validation flags and incremental loading via state table"
     columns:
       - name: order_id
+        data_type: bigint
         description: "Foreign key to orders"
         tests:
           - not_null
+
       - name: line_number
-        description: "Line sequence number"
+        data_type: integer
+        description: "Line number within order"
         tests:
           - not_null
+
       - name: product_id
+        data_type: bigint
         description: "Foreign key to products"
-      - name: customer_id
-        description: "Foreign key to customers"
-      - name: store_id
-        description: "Foreign key to stores"
-      - name: order_ts
-        description: "Order timestamp"
-      - name: order_dt_local
-        description: "Order date in local timezone"
-      - name: channel
-        description: "Order channel"
-      - name: currency
-        description: "Currency code"
-      - name: qty
-        description: "Quantity ordered"
-      - name: unit_price
-        description: "Price per unit"
+        tests:
+          - not_null
+
       - name: line_discount_pct
-        description: "Discount percentage (0-1)"
-      - name: tax_pct
-        description: "Tax percentage (0-1)"
-      - name: gross_amount
-        description: "qty * unit_price"
-      - name: discount_amount
-        description: "Discount applied to line"
-      - name: net_amount
-        description: "After discount"
-      - name: tax_amount
-        description: "Tax on net amount"
-      - name: line_total
-        description: "Final line amount"
-      - name: category
-        description: "Product category"
-      - name: subcategory
-        description: "Product subcategory"
-      - name: price_tier
-        description: "Product price tier"
-      - name: discount_band
-        description: "No Discount, 1-10%, 11-25%, 26-50%, Over 50%"
-      - name: quantity_band
-        description: "Single Unit, Small Batch, Medium Batch, Bulk Order"
+        data_type: decimal(5,4)
+        description: "Discount percentage (0 to 1)"
+
+      # QUALITY FLAGS
+      - name: has_null_order_id
+        data_type: boolean
+        description: "Flag: order_id is null (based on staging not_null test)"
+
+      - name: has_null_product_id
+        data_type: boolean
+        description: "Flag: product_id is null (based on staging not_null test)"
+
+      - name: has_invalid_discount_range
+        data_type: boolean
+        description: "Flag: line_discount_pct out of range 0-1 (based on staging discount_percentage_range test)"
+
+      - name: has_invalid_order_relationship
+        data_type: boolean
+        description: "Flag: order_id doesn't exist in orders (based on staging relationships test)"
+
+      - name: has_invalid_product_relationship
+        data_type: boolean
+        description: "Flag: product_id doesn't exist in products (based on staging relationships test)"
+
+      - name: has_invalid_quantity
+        data_type: boolean
+        description: "Flag: qty is null or <= 0"
+
+      - name: has_invalid_unit_price
+        data_type: boolean
+        description: "Flag: unit_price is null or < 0"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue(s) if invalid"
+
       - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
 
   - name: silver_shipments
-    description: "Shipment tracking fact with delivery metrics"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: shipment_id
+    description: "Enriched shipment data with quality validation flags and incremental loading via state table"
     columns:
       - name: shipment_id
-        description: "Primary key"
+        data_type: bigint
+        description: "Unique shipment identifier"
         tests:
           - unique
           - not_null
+
       - name: order_id
+        data_type: bigint
         description: "Foreign key to orders"
-      - name: customer_id
-        description: "Foreign key to customers"
-      - name: store_id
-        description: "Foreign key to stores"
-      - name: order_ts
-        description: "Order timestamp"
-      - name: order_dt_local
-        description: "Order date in local timezone"
-      - name: channel
-        description: "Order channel"
-      - name: currency
-        description: "Currency code"
-      - name: qty
-        description: "Quantity ordered"
-      - name: unit_price
-        description: "Price per unit"
-      - name: line_discount_pct
-        description: "Discount percentage (0-1)"
-      - name: tax_pct
-        description: "Tax percentage (0-1)"
-      - name: gross_amount
-        description: "qty * unit_price"
-      - name: discount_amount
-        description: "Discount applied to line"
-      - name: net_amount
-        description: "After discount"
-      - name: tax_amount
-        description: "Tax on net amount"
-      - name: line_total
-        description: "Final line amount"
-      - name: category
-        description: "Product category"
-      - name: subcategory
-        description: "Product subcategory"
-      - name: price_tier
-        description: "Product price tier"
-      - name: discount_band
-        description: "No Discount, 1-10%, 11-25%, 26-50%, Over 50%"
-      - name: quantity_band
-        description: "Single Unit, Small Batch, Medium Batch, Bulk Order"
+        tests:
+          - not_null
+
+      # QUALITY FLAGS
+      - name: has_null_shipment_id
+        data_type: boolean
+        description: "Flag: shipment_id is null (based on staging not_null test)"
+
+      - name: has_null_order_id
+        data_type: boolean
+        description: "Flag: order_id is null (based on staging not_null test)"
+
+      - name: has_invalid_order_relationship
+        data_type: boolean
+        description: "Flag: order_id doesn't exist in orders (based on staging relationships test)"
+
+      - name: has_delivered_before_shipped
+        data_type: boolean
+        description: "Flag: delivered_at is before shipped_at (logical error)"
+
+      - name: has_future_shipped_at
+        data_type: boolean
+        description: "Flag: shipped_at is in the future"
+
+      - name: has_future_delivered_at
+        data_type: boolean
+        description: "Flag: delivered_at is in the future"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
       - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
 
   - name: silver_returns
-    description: "Product return fact with timing and reason analysis"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: return_id
+    description: "Enriched return data with quality validation flags and incremental loading via state table"
     columns:
       - name: return_id
-        description: "Primary key"
+        data_type: bigint
+        description: "Unique return identifier"
         tests:
           - unique
           - not_null
+
       - name: order_id
+        data_type: bigint
         description: "Foreign key to orders"
+        tests:
+          - not_null
+
       - name: product_id
+        data_type: bigint
         description: "Foreign key to products"
-      - name: customer_id
-        description: "Foreign key to customers"
-      - name: store_id
-        description: "Foreign key to stores"
-      - name: return_ts
-        description: "Return timestamp"
-      - name: return_date
-        description: "Return date"
-      - name: return_qty
-        description: "Quantity returned"
-      - name: return_reason
-        description: "Raw return reason text"
-      - name: order_ts
-        description: "Original order timestamp"
-      - name: order_dt_local
-        description: "Original order date in local timezone"
-      - name: category
-        description: "Product category"
-      - name: subcategory
-        description: "Product subcategory"
-      - name: days_to_return
-        description: "Days from order to return"
-      - name: return_category
-        description: "Defective, Wrong Item, Size Issue, Changed Mind, Quality Issue, Other"
-      - name: return_window
-        description: "Within 1 Week, 2 Weeks, 1 Month, After 1 Month"
+        tests:
+          - not_null
+
+      # QUALITY FLAGS
+      - name: has_null_return_id
+        data_type: boolean
+        description: "Flag: return_id is null"
+
+      - name: has_null_order_id
+        data_type: boolean
+        description: "Flag: order_id is null"
+
+      - name: has_null_product_id
+        data_type: boolean
+        description: "Flag: product_id is null"
+
+      - name: has_null_return_ts
+        data_type: boolean
+        description: "Flag: return_ts is null"
+
+      - name: has_invalid_order_relationship
+        data_type: boolean
+        description: "Flag: order_id doesn't exist in orders (based on staging relationships test)"
+
+      - name: has_invalid_product_relationship
+        data_type: boolean
+        description: "Flag: product_id doesn't exist in products (based on staging relationships test)"
+
+      - name: has_invalid_quantity
+        data_type: boolean
+        description: "Flag: qty is null or <= 0"
+
+      - name: has_future_return_ts
+        data_type: boolean
+        description: "Flag: return_ts is in the future"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
       - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
 
   - name: silver_sensors
-    description: "Sensor readings with anomaly detection (detail level)"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: ['store_id', 'shelf_id', 'sensor_ts']
+    description: "Enriched sensor data with quality validation flags and incremental loading via state table"
     columns:
       - name: sensor_ts
+        data_type: timestamp with time zone
         description: "Sensor reading timestamp"
         tests:
           - not_null
-      - name: sensor_date
-        description: "Sensor reading date"
+
       - name: store_id
+        data_type: bigint
         description: "Foreign key to stores"
         tests:
           - not_null
+
       - name: shelf_id
+        data_type: varchar
         description: "Shelf identifier"
         tests:
           - not_null
-      - name: temperature_c
-        description: "Temperature in Celsius"
-      - name: humidity_pct
-        description: "Humidity percentage"
-      - name: battery_mv
-        description: "Battery level in millivolts"
-      - name: has_temperature_anomaly
-        description: "True if temperature outside -20 to 50°C"
-      - name: has_humidity_anomaly
-        description: "True if humidity outside 10-95%"
-      - name: battery_level
-        description: "Critical, Low, Medium, Good"
-      - name: temperature_range
-        description: "Below Freezing, Cold, Cool, Optimal, Warm, Hot"
-      - name: humidity_range
-        description: "Dry, Optimal, Humid, Very Humid"
-      - name: ingestion_ts
-        description: "Source ingestion timestamp"
-      - name: transformed_at
-        description: "Timestamp when transformation occurred"
 
-  - name: silver_events
-    description: "User event tracking with categorization"
-    config:
-      schema: silver
-      materialized: incremental
-      unique_key: event_id
+      - name: temperature_c
+        data_type: decimal(5,2)
+        description: "Temperature in Celsius"
+
+      - name: humidity_pct
+        data_type: decimal(5,2)
+        description: "Humidity percentage"
+
+      - name: battery_mv
+        data_type: integer
+        description: "Battery level in millivolts"
+
+      # QUALITY FLAGS
+      - name: has_null_sensor_ts
+        data_type: boolean
+        description: "Flag: sensor_ts is null"
+
+      - name: has_null_store_id
+        data_type: boolean
+        description: "Flag: store_id is null"
+
+      - name: has_null_shelf_id
+        data_type: boolean
+        description: "Flag: shelf_id is null"
+
+      - name: has_invalid_store_relationship
+        data_type: boolean
+        description: "Flag: store_id doesn't exist in stores (based on staging relationships test)"
+
+      - name: has_extreme_temperature_anomaly
+        data_type: boolean
+        description: "Flag: temperature_c outside range -50 to 80 (sensor malfunction)"
+
+      - name: has_extreme_humidity_anomaly
+        data_type: boolean
+        description: "Flag: humidity_pct outside range 0 to 100 (sensor malfunction)"
+
+      - name: has_extreme_battery_anomaly
+        data_type: boolean
+        description: "Flag: battery_mv outside range 0 to 5000 (sensor malfunction)"
+
+      - name: has_future_sensor_ts
+        data_type: boolean
+        description: "Flag: sensor_ts is in the future"
+
+      - name: has_temperature_anomaly
+        data_type: boolean
+        description: "Flag: temperature_c outside operational range -20 to 50 (monitoring alert)"
+
+      - name: has_humidity_anomaly
+        data_type: boolean
+        description: "Flag: humidity_pct outside operational range 10 to 95 (monitoring alert)"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all critical quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
+  - name: silver_products
+    description: "Enriched product catalog data with quality validation flags"
     columns:
-      - name: event_id
-        description: "Primary key"
+      - name: product_id
+        data_type: bigint
+        description: "Surrogate key"
         tests:
           - unique
           - not_null
-      - name: user_id
-        description: "Foreign key to customers (nullable for anonymous)"
-      - name: session_id
-        description: "Session identifier"
-      - name: event_ts
-        description: "Event timestamp"
-      - name: event_date
-        description: "Event date"
-      - name: event_type
-        description: "page_view, click, add_to_cart, etc."
-      - name: detail_path
-        description: "Detail or path associated with event"
-      - name: meta_x
-        description: "Additional metadata"
-      - name: event_hour
-        description: "Hour of day (0-23)"
-      - name: event_day_of_week
-        description: "Day of week (0=Sunday)"
-      - name: is_weekend
-        description: "True if Saturday or Sunday"
-      - name: event_category
-        description: "Browse, Cart, Conversion, Search, Other"
-      - name: user_type
-        description: "Registered or Anonymous"
+
+      - name: sku
+        data_type: varchar
+        description: "Stock Keeping Unit - natural key"
+        tests:
+          - unique
+          - not_null
+
+      - name: current_price
+        data_type: decimal(12,4)
+        description: "Current selling price"
+
+      - name: is_discontinued
+        data_type: boolean
+        description: "Discontinued flag"
+
+      - name: introduced_dt
+        data_type: date
+        description: "Date when product was introduced"
+
+      - name: discontinued_dt
+        data_type: date
+        description: "Date when product was discontinued"
+
+      # QUALITY FLAGS
+      - name: has_null_product_id
+        data_type: boolean
+        description: "Flag: product_id is null (based on staging unique/not_null test)"
+
+      - name: has_null_sku
+        data_type: boolean
+        description: "Flag: sku is null (based on staging unique/not_null test)"
+
+      - name: has_negative_price
+        data_type: boolean
+        description: "Flag: current_price is negative"
+
+      - name: has_discontinued_before_introduced
+        data_type: boolean
+        description: "Flag: discontinued_dt is before introduced_dt (logical error)"
+
+      - name: has_discontinued_without_date
+        data_type: boolean
+        description: "Flag: is_discontinued is TRUE but discontinued_dt is NULL"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
       - name: ingestion_ts
-        description: "Source ingestion timestamp"
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
       - name: transformed_at
-        description: "Timestamp when transformation occurred"
+        data_type: timestamp with time zone
+        description: "Timestamp when record was transformed in silver layer"
+
+  - name: silver_stores
+    description: "Enriched store location data with quality validation flags"
+    columns:
+      - name: store_id
+        data_type: bigint
+        description: "Surrogate key"
+        tests:
+          - unique
+          - not_null
+
+      - name: store_code
+        data_type: varchar
+        description: "Store code - natural key"
+        tests:
+          - unique
+          - not_null
+
+      - name: latitude
+        data_type: double
+        description: "Store geographical latitude"
+
+      - name: longitude
+        data_type: double
+        description: "Store geographical longitude"
+
+      - name: open_dt
+        data_type: date
+        description: "Date when store opened"
+
+      - name: close_dt
+        data_type: date
+        description: "Date when store closed"
+
+      # QUALITY FLAGS
+      - name: has_null_store_id
+        data_type: boolean
+        description: "Flag: store_id is null (based on staging unique/not_null test)"
+
+      - name: has_null_store_code
+        data_type: boolean
+        description: "Flag: store_code is null (based on staging unique/not_null test)"
+
+      - name: has_invalid_latitude_range
+        data_type: boolean
+        description: "Flag: latitude out of range -90 to 90"
+
+      - name: has_invalid_longitude_range
+        data_type: boolean
+        description: "Flag: longitude out of range -180 to 180"
+
+      - name: has_closed_before_opened
+        data_type: boolean
+        description: "Flag: close_dt is before open_dt (logical error)"
+
+      - name: has_future_open_date
+        data_type: boolean
+        description: "Flag: open_dt is in the future"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
+      - name: transformed_at
+        data_type: timestamp with time zone
+        description: "Timestamp when record was transformed in silver layer"
+
+  - name: silver_suppliers
+    description: "Enriched supplier/vendor data with quality validation flags"
+    columns:
+      - name: supplier_id
+        data_type: bigint
+        description: "Surrogate key"
+        tests:
+          - unique
+          - not_null
+
+      - name: supplier_code
+        data_type: varchar
+        description: "Supplier code - natural key"
+        tests:
+          - unique
+          - not_null
+
+      - name: country_code
+        data_type: varchar
+        description: "ISO country code"
+
+      - name: lead_time_days
+        data_type: integer
+        description: "Average lead time in days"
+
+      # QUALITY FLAGS
+      - name: has_null_supplier_id
+        data_type: boolean
+        description: "Flag: supplier_id is null (based on staging unique/not_null test)"
+
+      - name: has_null_supplier_code
+        data_type: boolean
+        description: "Flag: supplier_code is null (based on staging unique/not_null test)"
+
+      - name: has_negative_lead_time
+        data_type: boolean
+        description: "Flag: lead_time_days is negative"
+
+      - name: has_extreme_lead_time
+        data_type: boolean
+        description: "Flag: lead_time_days exceeds 365 days"
+
+      - name: has_missing_country_code
+        data_type: boolean
+        description: "Flag: country_code is null"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
+      - name: transformed_at
+        data_type: timestamp with time zone
+        description: "Timestamp when record was transformed in silver layer"
+
+  - name: silver_exchange_rates
+    description: "Enriched foreign exchange rate data with quality validation flags"
+    columns:
+      - name: rate_date
+        data_type: date
+        description: "Date for exchange rate"
+        tests:
+          - not_null
+
+      - name: currency
+        data_type: varchar
+        description: "Currency code"
+        tests:
+          - not_null
+
+      - name: rate_to_aud
+        data_type: decimal(18,8)
+        description: "Exchange rate to Australian Dollar"
+
+      # QUALITY FLAGS
+      - name: has_null_rate_date
+        data_type: boolean
+        description: "Flag: rate_date is null"
+
+      - name: has_null_currency
+        data_type: boolean
+        description: "Flag: currency is null"
+
+      - name: has_null_rate
+        data_type: boolean
+        description: "Flag: rate_to_aud is null"
+
+      - name: has_zero_or_negative_rate
+        data_type: boolean
+        description: "Flag: rate_to_aud is zero or negative"
+
+      - name: has_extreme_rate
+        data_type: boolean
+        description: "Flag: rate_to_aud exceeds 1000 (anomaly)"
+
+      - name: has_future_rate_date
+        data_type: boolean
+        description: "Flag: rate_date is in the future"
+
+      - name: has_very_old_rate
+        data_type: boolean
+        description: "Flag: rate_date is more than 10 years old (monitoring)"
+
+      - name: is_valid_record
+        data_type: boolean
+        description: "Overall validity flag - TRUE if passes all quality checks"
+        tests:
+          - not_null
+
+      - name: quality_issue_type
+        data_type: varchar
+        description: "Description of quality issue if invalid"
+
+      - name: ingestion_ts
+        data_type: timestamp with time zone
+        description: "Timestamp when data was ingested"
+
+      - name: transformed_at
+        data_type: timestamp with time zone
+        description: "Timestamp when record was transformed in silver layer"
