@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+95,2024-04-05 02:33:35.001235,2024-04-05,6,1,web,giftcard,,5.75,AUD

@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+44,2024-02-14 01:11:08.000572,2024-02-14,5,1,pos,card,,5.88,AUD

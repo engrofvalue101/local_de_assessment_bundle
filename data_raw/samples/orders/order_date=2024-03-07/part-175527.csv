@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+66,2024-03-07 01:46:42.000858,2024-03-07,6,1,web,card,CPN5336,6.26,AUD

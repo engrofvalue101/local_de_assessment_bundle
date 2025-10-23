@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+137,2024-05-17 03:41:29.001781,2024-05-17,1,1,web,cash,,0.00,AUD

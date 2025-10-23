@@ -1,0 +1,4 @@
+order_id,line_number,product_id,qty,unit_price,line_discount_pct,tax_pct
+96,1,1,1,21.1387,0.0019,0.0758
+96,2,2,3,19.3581,0.0824,0.0256
+96,3,2,1,29.5530,0.0905,0.0878

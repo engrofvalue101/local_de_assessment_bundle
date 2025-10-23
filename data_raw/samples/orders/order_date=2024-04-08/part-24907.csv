@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+98,2024-04-08 02:38:26.001274,2024-04-08,8,1,web,cash,,1.92,AUD

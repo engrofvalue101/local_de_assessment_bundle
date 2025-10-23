@@ -1,0 +1,2 @@
+order_id,order_ts,order_dt_local,customer_id,store_id,channel,payment_method,coupon_code,shipping_fee,currency
+146,2024-05-26 03:56:02.001898,2024-05-26,3,1,web,giftcard,,0.00,AUD
