@@ -172,6 +172,18 @@ CATEGORIES = {
 # Australian states/territories
 REGIONS = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "NT", "ACT"]
 
+# Define realistic coordinate ranges for Australian states/territories
+AUSTRALIA_COORDS = {
+    "NSW": {"lat": (-37.5, -28.2), "lon": (141.0, 154.0)},  # New South Wales
+    "VIC": {"lat": (-39.2, -34.0), "lon": (141.0, 150.0)},  # Victoria
+    "QLD": {"lat": (-29.0, -10.0), "lon": (138.0, 154.0)},  # Queensland
+    "SA":  {"lat": (-38.0, -26.0), "lon": (129.0, 141.0)},  # South Australia
+    "WA":  {"lat": (-35.0, -14.0), "lon": (113.0, 129.0)},  # Western Australia
+    "TAS": {"lat": (-43.7, -40.0), "lon": (144.0, 149.0)},  # Tasmania
+    "NT":  {"lat": (-26.0, -11.0), "lon": (129.0, 138.0)},  # Northern Territory
+    "ACT": {"lat": (-35.9, -35.1), "lon": (148.7, 149.4)},  # Australian Capital Territory
+}
+
 # Currencies for exchange rates
 CURRENCIES = ["USD", "EUR", "GBP", "JPY"]
 

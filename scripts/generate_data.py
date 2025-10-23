@@ -577,10 +577,20 @@ class DataGenerator:
             region = random.choice(REGIONS)
             state = region
             
-            # Coordinates (sometimes impossible)
-            latitude = -35.0 + random.random() * 10.0
-            longitude = 115.0 + random.random() * 20.0
+            # Get coordinate range for the selected state
+            if state in AUSTRALIA_COORDS:
+                lat_range = AUSTRALIA_COORDS[state]["lat"]
+                lon_range = AUSTRALIA_COORDS[state]["lon"]
+                
+                # Generate coordinates within the state's actual boundaries
+                latitude = lat_range[0] + random.random() * (lat_range[1] - lat_range[0])
+                longitude = lon_range[0] + random.random() * (lon_range[1] - lon_range[0])
+            else:
+                # Fallback for any unexpected region
+                latitude = -35.0 + random.random() * 10.0
+                longitude = 115.0 + random.random() * 20.0
             
+            # Apply anomaly for impossible coordinates AFTER generating real ones
             if random.random() < ANOMALY_RATES["stores_impossible_coords"]:
                 latitude = random.choice([999.0, -999.0])
                 longitude = random.choice([999.0, -999.0])
