@@ -44,31 +44,14 @@ silver_returns AS (
     SELECT 
         return_id,
         order_id,
-        line_number,
         return_ts,
         return_reason,
-        return_amount,
         ingestion_ts
     FROM {{ ref('silver_returns') }}
     {% if is_incremental() %}
         WHERE ingestion_ts > (SELECT MAX(ingestion_ts) FROM {{ this }})
     {% endif %}
 ),
-silver_returns AS (
-    SELECT 
-        return_id,
-        order_id,
-        line_number,
-        return_ts,
-        return_reason,
-        return_amount,
-        ingestion_ts
-    FROM {{ ref('silver_returns') }}
-    {% if is_incremental() %}
-        WHERE ingestion_ts > (SELECT MAX(ingestion_ts) FROM {{ this }})
-    {% endif %}
-),
-
 dim_customer AS (
     SELECT customer_key, customer_id FROM {{ ref('dim_customers') }}
 ),
@@ -130,10 +113,7 @@ sales_with_keys AS (
             WHEN r.return_id IS NOT NULL THEN TRUE 
             ELSE FALSE 
         END AS is_returned,
-        r.return_ts,
-        r.return_reason,
-        r.return_amount,
-        
+
         -- Derived metrics
         CASE 
             WHEN o.line_discount_pct > 0 THEN TRUE 
@@ -160,8 +140,7 @@ sales_with_keys AS (
     INNER JOIN dim_product p ON o.product_id = p.product_id
     INNER JOIN dim_store s ON o.store_id = s.store_id
     INNER JOIN dim_date d ON o.order_date = d.date_day
-    LEFT JOIN silver_returns r ON o.order_id = r.order_id 
-                                AND o.line_number = r.line_number
+    LEFT JOIN silver_returns r ON o.order_id = r.order_id
 )
 
 SELECT * FROM sales_with_keys
