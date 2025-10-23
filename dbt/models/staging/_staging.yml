@@ -103,8 +103,16 @@ models:
         description: "Flag indicating GDPR consent status"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_products
     description: "Cleaned and standardized product catalog data from bronze layer"
@@ -163,8 +171,16 @@ models:
         description: "Date when product was discontinued (null if active)"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_stores
     description: "Cleaned and standardized retail store location data from bronze layer"
@@ -223,8 +239,16 @@ models:
         description: "Date when store closed (null if active)"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_suppliers
     description: "Cleaned and standardized supplier/vendor data from bronze layer"
@@ -267,8 +291,16 @@ models:
         description: "Flag indicating preferred supplier status"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_orders
     description: "Cleaned and standardized order header data from bronze layer"
@@ -298,10 +330,23 @@ models:
       - name: customer_id
         data_type: bigint
         description: "Foreign key to customers"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+          - foreign_key_violation_rate:
+              to: ref('stg_customers')
+              field: customer_id
+              threshold: 1.5
 
       - name: store_id
         data_type: bigint
         description: "Foreign key to stores"
+        tests:
+          - relationships:
+              to: ref('stg_stores')
+              field: store_id
 
       - name: channel
         data_type: varchar
@@ -324,8 +369,16 @@ models:
         description: "Currency code for transaction"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_order_lines
     description: "Cleaned and standardized order line item details from bronze layer"
@@ -340,6 +393,10 @@ models:
       - name: order_id
         data_type: bigint
         description: "Foreign key to orders"
+        tests:
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
 
       - name: line_number
         data_type: integer
@@ -348,6 +405,10 @@ models:
       - name: product_id
         data_type: bigint
         description: "Foreign key to products"
+        tests:
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
 
       - name: qty
         data_type: integer
@@ -360,14 +421,24 @@ models:
       - name: line_discount_pct
         data_type: decimal(5,4)
         description: "Discount percentage applied to line item"
+        tests:
+          - discount_percentage_range
 
       - name: tax_pct
         data_type: decimal(5,4)
         description: "Tax percentage applied to line item"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_shipments
     description: "Cleaned and standardized shipment tracking data from bronze layer"
@@ -391,6 +462,9 @@ models:
         description: "Foreign key to orders"
         tests:
           - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
 
       - name: carrier
         data_type: varchar
@@ -409,8 +483,16 @@ models:
         description: "Cost of shipping"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_returns
     description: "Cleaned and standardized product return data from bronze layer"
@@ -429,10 +511,18 @@ models:
       - name: order_id
         data_type: bigint
         description: "Foreign key to orders"
+        tests:
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
 
       - name: product_id
         data_type: bigint
         description: "Foreign key to products"
+        tests:
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
 
       - name: return_ts
         data_type: timestamp with time zone
@@ -447,8 +537,16 @@ models:
         description: "Return reason code or description"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_exchange_rates
     description: "Cleaned and standardized foreign exchange rate data from bronze layer"
@@ -460,7 +558,7 @@ models:
           config:
             severity: warn
     columns:
-      - name: date
+      - name: rate_date
         data_type: date
         description: "Date for which exchange rate is applicable"
 
@@ -473,8 +571,16 @@ models:
         description: "Exchange rate to Australian Dollar"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_sensors
     description: "Cleaned and standardized IoT sensor reading data from bronze layer"
@@ -493,6 +599,10 @@ models:
       - name: store_id
         data_type: bigint
         description: "Foreign key to stores"
+        tests:
+          - relationships:
+              to: ref('stg_stores')
+              field: store_id
 
       - name: shelf_id
         data_type: varchar
@@ -511,8 +621,16 @@ models:
         description: "Battery level in millivolts"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
 
   - name: stg_events
     description: "Cleaned and standardized user event tracking data from bronze layer"
@@ -539,6 +657,11 @@ models:
       - name: user_id
         data_type: bigint
         description: "Foreign key to customers/users"
+        tests:
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+              where: "user_id is not null"
 
       - name: session_id
         data_type: varchar
@@ -553,5 +676,13 @@ models:
         description: "Additional event metadata"
 
       - name: ingestion_ts
-        data_type: timestamp
+        data_type: timestamp with time zone
         description: "Timestamp when data was ingested into the data lake"
+
+      - name: src_filename
+        data_type: varchar
+        description: "The source filename from which the record was ingested"
+
+      - name: src_row_hash
+        data_type: varchar
+        description: "The hash of the source row for change detection"
