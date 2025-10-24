@@ -74,8 +74,8 @@ def parse_args():
                        help="Output directory (default: data_raw)")
     parser.add_argument("--scale", type=float, default=1.0,
                        help="Scale factor - use 0.01 for 1%% of data (default: 1.0)")
-    parser.add_argument("--max-days", type=int, default=365,
-                       help="Time span for date-based data in days (default: 365)")
+    parser.add_argument("--max-days", type=int, default=1028,
+                       help="Time span for date-based data in days (default: 1028 - Jan 2023 to Oct 2025)")
     parser.add_argument("--tables", type=str, default="",
                        help="Generate only specific tables, comma-separated (e.g., customers,products)")
     return parser.parse_args()
@@ -426,7 +426,7 @@ class DataGenerator:
             
             # Dates
             birth_date = date(1960, 1, 1) + timedelta(days=random.randint(0, 20000))
-            join_timestamp = datetime(2024, 1, 1, tzinfo=TZ) + timedelta(
+            join_timestamp = datetime(2023, 1, 1, tzinfo=TZ) + timedelta(
                 days=random.randint(0, 730), seconds=random.randint(0, 86399))
             join_timestamp = join_timestamp.astimezone(timezone.utc).replace(tzinfo=None)
             
@@ -782,8 +782,8 @@ class DataGenerator:
             next_shipment_id = 1
             
             # Date/time setup
-            start_datetime = datetime(2024, 1, 1, tzinfo=TZ)
-            days_span = max(1, min(self.max_days, 365))
+            start_datetime = datetime(2023, 1, 1, tzinfo=TZ)
+            days_span = max(1, self.max_days)
             
             def get_order_timestamp(order_id: int) -> datetime:
                 """Calculate timestamp for an order based on its ID."""
@@ -1011,8 +1011,8 @@ class DataGenerator:
         print(f"[events] Target rows: {num_events:,}")
         
         malformed_rate = ANOMALY_RATES["events_malformed_json"]
-        start_datetime = datetime(2024, 1, 1, tzinfo=TZ)
-        days_span = max(1, min(self.max_days, 365))
+        start_datetime = datetime(2023, 1, 1, tzinfo=TZ)
+        days_span = max(1, self.max_days)
         
         # Buffer to accumulate events by date
         # Key: date string, Value: list of JSON strings
@@ -1111,8 +1111,8 @@ class DataGenerator:
         ensure_dir(output_base)
         
         num_stores = self.sizes["stores"]
-        start_datetime = datetime(2024, 1, 1)#, tzinfo=TZ)
-        months_span = max(1, min(self.max_days // 30, 24))
+        start_datetime = datetime(2023, 1, 1)#, tzinfo=TZ)
+        months_span = max(1, self.max_days // 30)
         
         print(f"[sensors] Target rows: {num_readings:,}")
         print(f"[sensors] Stores: {num_stores}, Months: {months_span}")
@@ -1260,7 +1260,7 @@ class DataGenerator:
             
         # Generate return timestamps 1-60 days after corresponding orders
         def get_return_timestamp(order_id: int) -> datetime:
-            base_date = datetime(2024, 1, 1, tzinfo=TZ) + timedelta(
+            base_date = datetime(2023, 1, 1, tzinfo=TZ) + timedelta(
                 days=order_id % 365, hours=random.randint(0, 23))
             return base_date + timedelta(days=random.randint(1, 60), hours=random.randint(0, 23))
 
@@ -1291,7 +1291,7 @@ class DataGenerator:
                 extra_ids = list(range(num_returns + 1, num_returns + 1 + extra_count))
                 extra_order_ids = [random.randint(1, self.sizes["orders"]) for _ in extra_ids]
                 extra_product_ids = [random.randint(1, self.sizes["products"]) for _ in extra_ids]
-                extra_timestamps = [datetime(2024, 1, 1, tzinfo=TZ) + timedelta(
+                extra_timestamps = [datetime(2023, 1, 1, tzinfo=TZ) + timedelta(
                     days=random.randint(0, 365)) for _ in extra_ids]
                 
                 # Version 2 table (adds return_reason_code)
@@ -1355,7 +1355,7 @@ class DataGenerator:
             "return_id": list(range(num_returns + 1, num_returns + 1 + extra_count)),
             "order_id": [random.randint(1, self.sizes["orders"]) for _ in range(extra_count)],
             "product_id": [random.randint(1, self.sizes["products"]) for _ in range(extra_count)],
-            "return_ts": [datetime(2024, 1, 1, tzinfo=TZ) + timedelta(
+            "return_ts": [datetime(2023, 1, 1, tzinfo=TZ) + timedelta(
                 days=random.randint(0, 365)) for _ in range(extra_count)],
             "qty": [1 for _ in range(extra_count)],
             "reason": [random.choice(["defective", "other"]) for _ in range(extra_count)],
