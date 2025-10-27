@@ -193,3 +193,4 @@ test_data/
 dbt_packages/
 package-lock.yml
 lake/_rejects
+analytics/ecommerce_reports.pbix
